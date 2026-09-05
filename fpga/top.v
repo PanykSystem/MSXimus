@@ -2586,19 +2586,26 @@ assign keyboard_addr = ppi_port_c[3:0];
     //1110110 0xxxxxxx xxxxxxxx msx2+ bios, 32 KB, 0x760000 - 0x767fff
     //111010x xxxxxxxx xxxxxxxx wondertang disk, 128 KB, bank D, 0x740000 - 0x75ffff
     //11100xx xxxxxxxx xxxxxxxx kanji data jis1 + jis2, 256 KB, 0x700000 - 0x73ffff
-    //10xxxxx xxxxxxxx xxxxxxxx megaram, 2 MB, bank C
-    //0xxxxxx xxxxxxxx xxxxxxxx mapper, 4 MB, banks A+B
+    //10xxxxx xxxxxxxx xxxxxxxx megaram, mitad BAJA (A21=0), 2 MB, bank C   (V3.5)
+    //01xxxxx xxxxxxxx xxxxxxxx megaram, mitad ALTA (A21=1), 2 MB, bank B   (V3.5)
+    //00xxxxx xxxxxxxx xxxxxxxx mapper, 2 MB, bank A                        (V3.5: era 4 MB en A+B)
+    //
+    // V3.5: el mapper se recorta a 2 MB (bit 7 del registro ignorado: los
+    // segmentos 128-255 aliasan sobre 0-127, que es como se comporta un mapper
+    // real de 8 bits) y ese hueco se lo lleva la megaram, que pasa a 4 MB. La
+    // mitad baja sigue en el banco C: todo lo de <=2 MB cae en las mismas
+    // direcciones fisicas que antes. Sin sumador: A21 elige {~A21, A21}.
 
     assign ram_addr = (~flash_idle) ? rom_addr :
                 `ifdef ENABLE_MAPPER
-                        (mapper_req == 1) ? { 1'b0, mapper_addr[21:0] } :  //bank A+B
+                        (mapper_req == 1) ? { 2'b00, mapper_addr[20:0] } :  //bank A (2 MB)
                 `endif
                         (bios_req == 1 ) ? { 8'b11101100, bus_addr[14:0] } : //bank D
                         (subrom_logo_req == 1 ) ? { 8'b11101101, bus_addr[14:0] } : //bank D
                 `ifdef ENABLE_SDCARD
                         (megarom_req == 1 ) ? { 6'b111010, megarom_addr[16:0] } : //bank D
                 `endif
-                        (megaram_req == 1 ) ? { 2'b10, megaram_addr[20:0] } :  //bank C
+                        (megaram_req == 1 ) ? { ~megaram_addr[21], megaram_addr[21], megaram_addr[20:0] } :  //bank C (A21=0) / bank B (A21=1)
                         (kanji_driver_req == 1 ) ? { 8'b11101110, ~bus_addr[14], bus_addr[13:0] } : //bank D
                         (kanji_data_ram_req == 1 ) ? { 5'b11100, kanji_data_ram_addr[17:0] } : //bank D
                 `ifdef ENABLE_WIFI
@@ -3904,7 +3911,7 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     wire [14:0] scc2_wav;
     wire megaram_req;
     wire megaram_wrt;
-    wire [20:0] megaram_addr;
+    wire [21:0] megaram_addr;   // V3.5: 4 MB
     wire megaram_enabled;
 
     always @ (posedge clk_54m) begin
@@ -3936,6 +3943,7 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
         .map_sel (map_sel),
         .map_linear (map_linear),
         .sram_cfg (config3_ff),
+        .map_ext (config6_ff),          // V3.5: puerto #46 (NEO / mitad alta)
 
         .megaram_req (megaram_req),
         .megaram_wrt (megaram_wrt),
@@ -4265,7 +4273,7 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     wire scc2_req;
     wire [14:0] scc2_wav;
     wire megaram_req;
-    wire [20:0] megaram_addr;
+    wire [21:0] megaram_addr;   // V3.5: 4 MB
     wire megaram_enabled;
     wire [15:0] audio_sample;
     wire [15:0] audio_sample_r;
@@ -4360,6 +4368,11 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     wire config3_req;
     wire config4_req;   // _161: puerto #44 = ganancia maestra de audio
     reg [7:0] config3_ff = 0;       // puerto #43: sram_cfg de la megaram (volatil)
+    wire config6_req;               // V3.5: puerto #46 = extension de mapper de la megaram
+    reg [7:0] config6_ff = 0;       //   bit0 = NEO (ASCII8->NEO-8, ASCII16->NEO-16),
+                                    //   bit4 = mitad alta de los 4 MB para el cargador.
+                                    //   Volatil como #43: lo escribe el menu al lanzar y
+                                    //   SOBREVIVE al reset del MSX (no hay clausula de reset).
     wire config5_req;
     reg config_turbo_boot_ff = 0;   // puerto #45 bit0: arrancar en turbo (PERSISTIDO en
                                     // flash byte[4] del bloque config: 'T'=0x54 -> on;
@@ -4385,6 +4398,9 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
             end
             if (config3_req == 1 ) begin
                 config3_ff <= cpu_dout;
+            end
+            if (config6_req == 1 ) begin
+                config6_ff <= cpu_dout;
             end
             if (config2_req == 1 ) begin
                 config_update <= 1;
@@ -4461,6 +4477,7 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     assign config3_req = (config_ok == 1 && bus_addr[7:0] == 8'h43 && bus_iorq_n == 0 && bus_m1_n == 1 && bus_wr_n == 0)? 1:0;
     assign config4_req = (config_ok == 1 && bus_addr[7:0] == 8'h44 && bus_iorq_n == 0 && bus_m1_n == 1 && bus_wr_n == 0)? 1:0;
     assign config5_req = (config_ok == 1 && bus_addr[7:0] == 8'h45 && bus_iorq_n == 0 && bus_m1_n == 1 && bus_wr_n == 0)? 1:0;
+    assign config6_req = (config_ok == 1 && bus_addr[7:0] == 8'h46 && bus_iorq_n == 0 && bus_m1_n == 1 && bus_wr_n == 0)? 1:0;
     assign config_enable_scanlines = config1_ff[3];
     //assign config_keyboard = config2_ff[4:3];
     assign config_enable_stereo = config2_ff[5];
@@ -4493,7 +4510,8 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
                          ( bus_addr[3:0] == 4'h2 ) ? config2_ff :
                          ( bus_addr[3:0] == 4'h3 ) ? config3_ff :
                          ( bus_addr[3:0] == 4'h4 ) ? {5'b0, snd_gain_ff} :
-                         ( bus_addr[3:0] == 4'h5 ) ? {7'b0, config_turbo_boot_ff} : 8'hff;
+                         ( bus_addr[3:0] == 4'h5 ) ? {7'b0, config_turbo_boot_ff} :
+                         ( bus_addr[3:0] == 4'h6 ) ? config6_ff : 8'hff;
 
 
     always @ (posedge clk_54m) begin
@@ -4977,6 +4995,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     wire [39:0] sd_pnm_w;
     wire [31:0] sd_psn_w;
     wire sd_crc_error_w;
+    wire sd_rcrc_error_w;   // V3.5: CRC16 de lectura mal (bit2 de SDC_STATUS)
     wire sd_timeout_error_w;
     //reg ff_scc_enable;
     //wire scc_enable_w;
@@ -5005,8 +5024,14 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .q_b(sd_inbyte_w)
     );
     
+    // V3.5: sdclk a 6,75 MHz (periodo 4 de clk_27m; era 2,25 MHz con CLK_DIV=2).
+    // La rafaga de 512 B pasa de 1,7 ms a 0,6 ms. Seguro porque el muestreo de
+    // CMD/DAT0 ya no depende del divisor (sd_reader.sv, sddat0_s / sdcmdin_s).
+    // Si una placa diera guerra: FAST_DIV 1 = 4,5 MHz, 4 = lo de siempre.
+    localparam [15:0] SD_FAST_DIV = 16'd0;
     sd_reader #(
         .CLK_DIV(3'd2),
+        .FAST_DIV(SD_FAST_DIV),
         .SIMULATE(0)
     ) sd1 (
         // 🚨 EL LECTOR VUELVE A VIRGEN AL SOLTAR EL MANDO. sd_reader solo
@@ -5043,6 +5068,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .pnm(sd_pnm_w),
         .psn(sd_psn_w),
         .crc_error(sd_crc_error_w),
+        .rcrc_error(sd_rcrc_error_w),
         .timeout_error(sd_timeout_error_w),
         .init(ff_sd_init)
     );
@@ -5086,31 +5112,48 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     end
 
     reg       sd_done_d  = 1'b0;
+    reg       sd_tmo_d   = 1'b0;
     reg [1:0] sd_wretry  = 2'd0;
+    reg [1:0] sd_rretry  = 2'd0;
     reg       sd_wr_hold = 1'b0;
     reg       sd_wr_fail = 1'b0;
 
-    wire sd_wr_done_edge = sd_done_w && !sd_done_d && ff_sd_wstart;
+    // V3.5: TODO por FLANCO. rdone es un nivel (y durante un CMD12 de
+    // cancelacion se queda alto CIENTOS de ciclos), y timeout_error es sticky
+    // hasta el siguiente comando. Con el borrado por nivel, una orden que el
+    // Z80 escribiera en esa ventana se perdia SIN error: busy nunca subia y el
+    // menu daba por buena una lectura que no habia ocurrido (la "carrera del
+    // strobe" cazada el 01/09; el menu la tapa con sd_cmd_go, aqui se cierra en
+    // el RTL para que Nextor tampoco la sufra).
+    wire sd_done_edge    = sd_done_w && !sd_done_d;
+    wire sd_tmo_edge     = sd_timeout_error_w && !sd_tmo_d;
+    wire sd_wr_done_edge = sd_done_edge && ff_sd_wstart;
+    wire sd_rd_done_edge = sd_done_edge && ff_sd_rstart && !ff_sd_wstart;
     wire sd_wr_rechazado = sd_wr_done_edge && sd_crc_error_w && !sd_timeout_error_w;
     wire sd_wr_again     = sd_wr_rechazado && (sd_wretry != 2'd3);
     wire sd_wr_giveup    = sd_wr_rechazado && (sd_wretry == 2'd3);
+    // V3.5: lectura con CRC16 mal -> repetir el CMD17 (hasta 3 veces), igual que
+    // el token de escritura. Si aun asi falla, la lectura TERMINA (no se deja
+    // busy pegado: el dato puede ser malo, y bit2 de SDC_STATUS lo dice) para
+    // que un driver que no mira bit2 se comporte exactamente como hasta hoy.
+    wire sd_rd_rechazado = sd_rd_done_edge && sd_rcrc_error_w && !sd_timeout_error_w;
+    wire sd_rd_again     = sd_rd_rechazado && (sd_rretry != 2'd3);
+    wire sd_again        = sd_wr_again | sd_rd_again;
 
     always @(posedge clk_27m or negedge bus_reset_n) begin
         if (~bus_reset_n) begin
             ff_sd_rstart <= '0;
             ff_sd_wstart <= '0;
             sd_done_d  <= 1'b0;
+            sd_tmo_d   <= 1'b0;
             sd_wretry  <= 2'd0;
+            sd_rretry  <= 2'd0;
             sd_wr_hold <= 1'b0;
             sd_wr_fail <= 1'b0;
             ff_sd_init <= '0;
         end else begin
-            // FIX 60K (AUDIT §3, fila 3): un timeout tambien limpia rstart/wstart
-            // (antes quedaban pegados y el sector se reintentaba eternamente).
-            // timeout_error es sticky hasta el siguiente comando, pero el strobe de
-            // escritura Z80 a SDC_CMD dura varios ciclos de clk_27m y el case de
-            // abajo gana, asi que un reintento explicito sigue funcionando.
             sd_done_d <= sd_done_w;
+            sd_tmo_d  <= sd_timeout_error_w;
 
             // Contadores y reintento SOLO en el flanco de subida de done: rdone
             // es un nivel (vale mientras sdcmd_stat==WRITING2 && WDONE) y por
@@ -5120,13 +5163,16 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
                 if (sd_crc_error_w) sd_wcrc_cnt <= sd_wcrc_cnt + 16'd1;
                 sd_wretry <= sd_wr_again ? (sd_wretry + 2'd1) : 2'd0;
             end
+            if (sd_rd_done_edge) begin
+                sd_rretry <= sd_rd_again ? (sd_rretry + 2'd1) : 2'd0;
+            end
 
             // Tapa el hueco de busy: entre WDONE y el CMD24 del reintento la
             // FSM pasa por IDLING, y el Z80 sondea SDC_STATUS cada ~12 us. Sin
             // esto podria colarse justo ahi, darlo por escrito y empezar a
             // meter el siguiente sector en el dpram que el reintento esta
-            // leyendo.
-            if (sd_wr_again)      sd_wr_hold <= 1'b1;
+            // leyendo. (V3.5: tambien para el reintento de lectura.)
+            if (sd_again)         sd_wr_hold <= 1'b1;
             else if (sd_busy_w)   sd_wr_hold <= 1'b0;
 
             // Reintentos agotados: dejar busy ALTO hasta el siguiente SDC_CMD.
@@ -5136,7 +5182,10 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
             if (sd_wr_giveup) sd_wr_fail <= 1'b1;
             else if (sd_cs_w && ~bus_wr_n && bus_addr == SDC_CMD) sd_wr_fail <= 1'b0;
 
-            if ((sd_done_w || sd_timeout_error_w) && !sd_wr_again) begin
+            // Los strobes se sueltan en el FLANCO de done o de timeout, nunca
+            // por nivel. Un reintento (sd_again) los conserva para que IDLING
+            // reemita el mismo comando con el mismo sector.
+            if ((sd_done_edge || sd_tmo_edge) && !sd_again) begin
                 ff_sd_rstart <= '0;
                 ff_sd_wstart <= '0;
             end
@@ -5159,7 +5208,8 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
                 if (~bus_rd_n) begin
                     case(bus_addr) 
                         SDC_ENABLE:     ff_sd_cd <= { 7'b0, ff_sd_en };
-                        SDC_STATUS:     ff_sd_cd <= { sd_busy_w | sd_wr_hold | sd_wr_fail, 5'b0, sd_timeout_error_w, sd_crc_error_w };
+                        // bit7 busy · bit2 CRC de LECTURA mal (V3.5) · bit1 timeout · bit0 token de escritura rechazado
+                        SDC_STATUS:     ff_sd_cd <= { sd_busy_w | sd_wr_hold | sd_wr_fail, 4'b0, sd_rcrc_error_w, sd_timeout_error_w, sd_crc_error_w };
                         SDC_C_SIZE+0:   ff_sd_cd <= sd_c_size_w[7:0];
                         SDC_C_SIZE+1:   ff_sd_cd <= sd_c_size_w[15:8];
                         SDC_C_SIZE+2:   ff_sd_cd <= { 2'b0, sd_c_size_w[21:16] };

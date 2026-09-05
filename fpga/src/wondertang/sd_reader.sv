@@ -14,7 +14,12 @@ module sd_reader # (
                                         // when clk =  50~100MHz , set CLK_DIV = 3'd3,
                                         // when clk = 100~200MHz , set CLK_DIV = 3'd4,
                                         // ......
-    parameter       SIMULATE = 0
+    parameter       SIMULATE = 0,
+    // V3.5: divisor del reloj RAPIDO como valor directo. Periodo de sdclk =
+    // 2*FAST_DIV+4 ciclos de clk. Con clk=27 MHz: 4 -> 2,25 MHz (lo de siempre),
+    // 1 -> 4,5 MHz, 0 -> 6,75 MHz. El muestreo de las entradas ya NO depende
+    // del divisor (ver sddat0_s / sdcmdin_s), asi que 0 es seguro.
+    parameter [15:0] FAST_DIV = 16'd4
 ) (
     // rstn active-low, 1:working, 0:reset
     input  wire         rstn,
@@ -46,6 +51,7 @@ module sd_reader # (
     output reg [39:0]   pnm,
     output reg [31:0]   psn,
     output reg          crc_error,
+    output reg          rcrc_error,        // V3.5: CRC16 de LECTURA incorrecto (sticky hasta el siguiente comando)
     output reg          timeout_error,
     input  wire         init
 );
@@ -58,8 +64,10 @@ localparam [1:0] UNKNOWN = 2'd0,      // SD card type
                  SDv2    = 2'd2,
                  SDHCv2  = 2'd3;
 
-localparam [15:0] FASTCLKDIV = (16'd1 << CLK_DIV) ;
-localparam [15:0] SLOWCLKDIV = FASTCLKDIV * (SIMULATE ? 16'd5 : 16'd48);
+// V3.5: el rapido viene del parametro; el lento (init, <400 kHz) queda FIJO en
+// lo que era con CLK_DIV=2 (4*48=192 -> 27M/388 = 69,6 kHz).
+localparam [15:0] FASTCLKDIV = FAST_DIV;
+localparam [15:0] SLOWCLKDIV = (SIMULATE ? 16'd20 : 16'd192);
 
 reg        start  = 1'b0;
 reg [15:0] precnt = 0;
@@ -149,6 +157,25 @@ always @ (posedge clk) begin
 end
 wire sdcmd_in  = sdcmd_in_ff[1];
 wire sddat0_in = sddat0_in_ff[1];
+
+// V3.5: PUNTO DE MUESTREO INDEPENDIENTE DEL DIVISOR.
+// La FSM de datos avanza en ev_rise (el ciclo en que el registro sdclk acaba de
+// subir). Con el sincronizador de 2 FF, sddat0_in en ese ciclo es el pad de DOS
+// ciclos ANTES = todavia en la fase baja anterior. Con periodo 12 sobraba
+// margen; con periodo 4 caia justo sobre el flanco de bajada, donde la tarjeta
+// CAMBIA el dato. Aqui se captura el pad tal como estaba EN el flanco de subida
+// (ev_rise + 2 ciclos = el sincronizador ya trae el pad de ev_rise) y la FSM
+// consume esa muestra en el ev_rise SIGUIENTE: un periodo de retardo uniforme
+// para todos los bits, que no cambia nada mas que el punto de muestreo.
+reg  ev_rise_d1 = 1'b0;
+reg  ev_rise_d2 = 1'b0;
+reg  sddat0_s   = 1'b1;
+wire ev_rise    = ~sdclkl & sdclk;
+always @ (posedge clk) begin
+    ev_rise_d1 <= ev_rise;
+    ev_rise_d2 <= ev_rise_d1;
+    if (ev_rise_d2) sddat0_s <= sddat0_in;
+end
 
 sdcmd_ctrl u_sdcmd_ctrl (
     .rstn        ( rstn         ),
@@ -344,9 +371,20 @@ always @ (posedge clk or negedge rstn)
                                 sdcmd_stat <= IDLING;
                                 retry_fail <= 1'b1;
                             end
-                CMD12	:   if(~timeout && ~syntaxe)
+                CMD12	:   if(~timeout && ~syntaxe) begin
                                 sdcmd_stat <= IDLING;           // return idling after an error
-                default:		sdcmd_stat <= IDLING;	
+                            end else if(retry_cnt != RETRY_MAX) begin
+                                // V3.5: CMD12 ACOTADO. Antes, si la tarjeta no
+                                // respondia al cancel (justo el caso en que se
+                                // llega aqui), se reemitia CMD12 para siempre:
+                                // busy pegado hasta el reset. Ahora 4 intentos
+                                // y a IDLING con timeout_error (retry_fail).
+                                retry_cnt  <= retry_cnt + 2'd1;
+                            end else begin
+                                sdcmd_stat <= IDLING;
+                                retry_fail <= 1'b1;
+                            end
+                default:		sdcmd_stat <= IDLING;
             endcase
         end
     end
@@ -356,8 +394,8 @@ reg [15:0] crc_out;
 reg crc_ena = 0;
 reg crc_bit;
 
-sd_crc_16(
-.BITVAL(crc_bit), 
+sd_crc_16 u_sd_crc_16 (      // V3.5: con nombre (Icarus exige instancia nombrada; Gowin lo aceptaba anonimo)
+.BITVAL(crc_bit),
 .ENABLE(crc_ena), 
 .BITSTRB(clk), 
 .CLEAR(crc_init), 
@@ -367,6 +405,7 @@ sd_crc_16(
 reg [3:0] crc_stat;
 reg [9:0] raddr;
 reg [9:0] waddr;
+reg       rcrc_bad = 1'b0;      // V3.5: algun bit del CRC16 recibido no cuadra
 
 always @ (posedge clk or negedge rstn)
     if(~rstn) begin
@@ -379,6 +418,8 @@ always @ (posedge clk or negedge rstn)
         sddat0oe <= 0;
         crc_init <= 0;
         crc_error <= 0;
+        rcrc_error <= 0;
+        rcrc_bad <= 0;
         timeout_error <= 0;
     end else begin
         outen   <= 1'b0;
@@ -393,32 +434,42 @@ always @ (posedge clk or negedge rstn)
             outaddr <= '1;
             raddr <= '0;
             timeout_error <= 0;
+            // V3.5 (AUDIT #6): una lectura NO hereda el veredicto de la ultima
+            // escritura. Antes bit0 de SDC_STATUS en lecturas era el CRC rancio
+            // del ultimo CMD24; tras un give-up de escritura envenenaba TODAS las
+            // lecturas.
+            crc_error <= 0;
+            rcrc_error <= 0;
+            rcrc_bad <= 0;
             ridx   <= 0;
         end else if (sdcmd_stat == WRITING) begin
             sddat_stat <= WWAIT;
             outaddr <= '0;
             waddr <= '0;
             crc_error <= 0;
+            rcrc_error <= 0;
             timeout_error <= 0;
             ridx   <= 0;
-        end else if(~sdclkl & sdclk) begin
+        end else if(ev_rise) begin
             sddat0oe <= 0;
             case(sddat_stat)
                 // reading
                 RWAIT   : begin
-                    if(~sddat0_in) begin        // start bit = 0
+                    if(~sddat0_s) begin         // start bit = 0
                         sddat_stat <= RDURING;
                         ridx   <= 0;
-
+                        crc_init <= 1;          // V3.5: CRC16 de lectura desde cero
                     end else begin
-                        if(ridx > 1000000)      // SD datasheet: 1ms basta para el DAT. Timeout = 1e6 ciclos del reloj de ESTE dominio (~80ms A 12.5MHz; escala con la frecuencia real del build — comentario corregido en niquelado B)
+                        if(ridx > 1000000)      // SD datasheet: 1ms basta para el DAT. Timeout = 1e6 PERIODOS de sdclk (148 ms a 6,75 MHz; la spec pide <=100 ms de Nac)
                             sddat_stat <= RTIMEOUT;
                         ridx   <= ridx + 1;
                     end
                 end
                 RDURING : begin
-                    outbyte[3'd7 - ridx[2:0]] <= sddat0_in;
-                  
+                    outbyte[3'd7 - ridx[2:0]] <= sddat0_s;
+                    crc_bit <= sddat0_s;        // V3.5: mismo generador que la escritura
+                    crc_ena <= 1;
+
                     if(ridx[2:0] == 3'd7) begin
                         outen  <= 1'b1;
                         //outaddr<= ridx[11:3];
@@ -426,19 +477,24 @@ always @ (posedge clk or negedge rstn)
                     end
                     if(ridx >= 512*8-1) begin
                         sddat_stat <= RTAIL;
-                        ridx   <= 0; 
+                        ridx   <= 0;
                     end else begin
                         ridx   <= ridx + 1;
                     end
                 end
                 RTAIL   : begin
-                    // AUDIT #6 (upstream WonderTANG limitation, kept AS-IS by design):
-                    // the 16-bit READ CRC and the end bit are skipped here, so bus
-                    // corruption reaches the host as valid data. Note also that
-                    // crc_error keeps the stale value of the last WRITE during reads.
-                    // If ever fixed: feed sd_crc_16 during RDURING, compare here in
-                    // RTAIL, and clear crc_error when entering READING.
-                    if(ridx >= 8*8-1)          // ignores crc and end bit
+                    // V3.5 (AUDIT #6 cerrado): los 16 bits que siguen a los datos
+                    // son el CRC16 (MSB primero), comparados bit a bit contra el
+                    // mismo sd_crc_16 que la tarjeta acepta en escritura. Un fallo
+                    // sale por rcrc_error (bit2 de SDC_STATUS) y top.v reintenta
+                    // el CMD17 solo, como ya hacia con el token de escritura.
+                    if (ridx < 16) begin
+                        if (sddat0_s != crc_out[4'd15 - ridx[3:0]])
+                            rcrc_bad <= 1'b1;
+                    end else if (ridx == 16) begin
+                        rcrc_error <= rcrc_bad;
+                    end
+                    if(ridx >= 8*8-1)          // end bit + 7 de cortesia
                         sddat_stat <= RDONE;
                     ridx   <= ridx + 1;
                 end
@@ -448,12 +504,18 @@ always @ (posedge clk or negedge rstn)
                 // writing
                 ////////////
                 WWAIT   : begin
-                    sddat0out <= 1'b0; // start bit
-                    sddat0oe <= '1;
-                    sddat_stat <= WDURING;
-                    ridx   <= 0;
-                    crc_init <= 1;
-                    outen  <= 1'b1;   // bring in first byte
+                    // V3.5: NWR >= 2 ciclos entre el fin de la respuesta R1 y el
+                    // start bit de datos (antes iba a la primera subida).
+                    if (ridx < 2) begin
+                        ridx <= ridx + 1;
+                    end else begin
+                        sddat0out <= 1'b0; // start bit
+                        sddat0oe <= '1;
+                        sddat_stat <= WDURING;
+                        ridx   <= 0;
+                        crc_init <= 1;
+                        outen  <= 1'b1;   // bring in first byte
+                    end
                 end
                 WDURING : begin
 
@@ -471,49 +533,53 @@ always @ (posedge clk or negedge rstn)
                     end else if (ridx < 512*8+16+1+2) begin
                         sddat0oe <= 0;          // wait for crc status 2 cycles                   
                     end else begin
-                        if (!sddat0_in) begin   // wait for ack
-                            sddat_stat <= WTAIL;    // AUDIT #5: unified to nonblocking
-                            ridx <= 0;
+                        if (!sddat0_s) begin    // start bit del token de estado
+                            sddat_stat <= WTAIL;
                         end
-                        if(ridx > 13000000)      
+                        if(ridx > 13000000)
                              sddat_stat <= WTIMEOUT;
                     end
 
                     if(ridx[2:0] == 3'd7) begin
                         outen  <= 1'b1;         // bring next byte from sram
-                        //outaddr<= ridx[11:3];   
+                        //outaddr<= ridx[11:3];
                         outaddr <= outaddr + 9'd1;
                     end
-                    ridx   <= ridx + 1;
+                    // V3.5 — EL BUG QUE HACIA INVISIBLE EL RECHAZO DE LA TARJETA.
+                    // Aqui habia un "ridx <= ridx + 1" incondicional DESPUES del
+                    // "ridx <= 0" de la transicion a WTAIL: el ultimo NBA gana,
+                    // asi que WTAIL entraba con ridx ~4118, nunca capturaba los 3
+                    // bits del token (crc_stat se quedaba en X), crc_error NUNCA
+                    // se asignaba, y saltaba a WBUSY/WDONE con el primer 0 del
+                    // propio token. Consecuencia: el host daba la escritura por
+                    // terminada dentro del token, SIN esperar el busy de
+                    // programacion (DAT0=0), y el Z80 mandaba el CMD24 siguiente
+                    // con la tarjeta aun programando: ese bloque se perdia
+                    // "aceptado y no escrito". La pausa de ~2 ms que lo curaba
+                    // en el menu es, justamente, el tiempo de programacion.
+                    ridx   <= ((ridx >= 512*8+16+1+2) && !sddat0_s) ? 32'd0 : ridx + 1;
                 end
-                WTAIL   : begin                 // busy wait
+                WTAIL   : begin                 // token de estado: s2 s1 s0, end bit, y luego BUSY
                     if (ridx < 3) begin
-                        crc_stat <= { crc_stat[1:0], sddat0_in };
+                        crc_stat <= { crc_stat[1:0], sddat0_s };
+                        ridx <= ridx + 1;
+                    end else if (ridx == 3) begin
+                        ridx <= ridx + 1;       // end bit del token
                     end else begin
-
-                        if (ridx == 4)
-                            crc_error <= crc_stat != 3'b010;
-
-                        if (!sddat0_in) begin   // wait for ack
-                            sddat_stat <= WBUSY;
-                            ridx <= 0;
-                        end
-                        // AUDIT #5: timeout check moved OUT of the !sddat0 guard
-                        // (it was unreachable if the card never pulled DAT0 low),
-                        // same structure as WBUSY below.
-                        if(ridx > 13000000)
-                             sddat_stat <= WTIMEOUT;
-                    end
-                    ridx   <= ridx + 1;
-                end
-                WBUSY   :  begin
-                    if (sddat0_in) begin   // wait for ack
-                        sddat_stat <= WDONE;    // AUDIT #5: unified to nonblocking
+                        crc_error <= (crc_stat[2:0] != 3'b010);   // 010 = aceptado; 101 = CRC mal
+                        sddat_stat <= WBUSY;
                         ridx <= 0;
                     end
-                    if(ridx > 13000000)      
-                         sddat_stat <= WTIMEOUT;
-                    ridx   <= ridx + 1;
+                end
+                WBUSY   :  begin                // la tarjeta mantiene DAT0=0 mientras programa
+                    if (sddat0_s) begin
+                        sddat_stat <= WDONE;
+                        ridx <= 0;
+                    end else if (ridx > 13000000) begin
+                        sddat_stat <= WTIMEOUT;
+                    end else begin
+                        ridx <= ridx + 1;
+                    end
                 end
                 WTIMEOUT : timeout_error <= 1;
 

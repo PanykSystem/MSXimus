@@ -67,10 +67,29 @@ reg  [94:0] resp_r2;
 
 assign r2[127:1] = { resp_arg, resp_r2 };
 
-assign resparg = resp_arg;
+// V3.5: LONGITUD DE RESPUESTA POR COMANDO. El original desplazaba SIEMPRE 134
+// bits tras el start bit (la longitud de R2) y solo entonces daba 'done': con
+// una R1 de 48 bits el host se quedaba CIEGO 87 ciclos despues del end bit. Si
+// la tarjeta empezaba el bloque de datos en esa ventana (la spec permite NAC=2),
+// la lectura salia desplazada. A 2,25 MHz eran 39 us y las tarjetas tardan mas
+// en servir; a 6,75 MHz son 13 us, y ya no. Ahora R2 (CMD2/9/10) = 134, el
+// resto = 46, y 'done' cae en el end bit. Los campos de una respuesta corta
+// quedan en la parte baja del registro de desplazamiento (46 bits):
+//   T = [45], cmd = [44:39], arg = [38:7], crc7 = [6:0].
+reg         long_resp = 1'b0;
+wire        eff_st  = long_resp ? resp_st  : resp_r2[45];
+wire [5:0]  eff_cmd = long_resp ? resp_cmd : resp_r2[44:39];
+assign resparg = long_resp ? resp_arg : resp_r2[38:7];
 
 reg  [17:0] clkdivr = 18'h3FFFF;
 reg  [17:0] clkcnt  = 0;
+// V3.5: la respuesta se muestrea con el pad tal como estaba EN el flanco de
+// subida de sdclk (clkcnt==2: el sincronizador de 2 FF del padre ya trae el
+// pad del ciclo clkcnt==0, que es cuando el registro sdclk acaba de subir), y
+// la FSM la consume en el flanco siguiente. Antes se leia sdcmdin en el ciclo
+// de la subida = pad de 2 ciclos ANTES, en plena fase baja: valido solo si el
+// periodo era largo. Asi el punto de muestreo no depende del divisor.
+reg         sdcmdin_s = 1'b1;
 reg  [15:0] cnt1 = 0;
 reg  [ 5:0] cnt2 = 6'h3F;
 reg  [ 7:0] cnt3 = 0;
@@ -86,6 +105,8 @@ always @ (posedge clk or negedge rstn)
         {resp_st, resp_cmd, resp_arg} <= 0;
         clkdivr <= 18'h3FFFF;
         clkcnt  <= 0;
+        sdcmdin_s <= 1'b1;
+        long_resp <= 1'b0;
         cnt1 <= 0;
         cnt2 <= 6'h3F;
         cnt3 <= 0;
@@ -102,7 +123,10 @@ always @ (posedge clk or negedge rstn)
             sdclk <= 1'b0;
         else if (clkcnt == {clkdivr[16:0],1'b1} )
             sdclk <= 1'b1;
-        
+
+        if (clkcnt == 18'd2)
+            sdcmdin_s <= sdcmdin;
+
         if(~busy) begin
             if(start) busy <= 1'b1;
             req_cmd <= cmd;
@@ -111,7 +135,8 @@ always @ (posedge clk or negedge rstn)
             cnt1 <= precnt;
             cnt2 <= 6'd51;
             cnt3 <= TIMEOUT;
-            cnt4 <= 8'd134;
+            long_resp <= (cmd == 6'd2 || cmd == 6'd9 || cmd == 6'd10);
+            cnt4 <= (cmd == 6'd2 || cmd == 6'd9 || cmd == 6'd10) ? 8'd134 : 8'd46;
         end else if(done) begin
             busy <= 1'b0;
         end else if( clkcnt == clkdivr) begin
@@ -126,17 +151,17 @@ always @ (posedge clk or negedge rstn)
         end else if( clkcnt == {clkdivr[16:0],1'b1} && cnt1==16'd0 && cnt2==6'h3F ) begin
             if(cnt3 != 8'd0) begin
                 cnt3 <= cnt3 - 8'd1;
-                if(~sdcmdin)
+                if(~sdcmdin_s)
                     cnt3 <= 8'd0;
                 else if(cnt3 == 8'd1)
                     {done, timeout, syntaxe} <= 3'b110;
             end else if(cnt4 != 8'hFF) begin
                 cnt4 <= cnt4 - 8'd1;
                 if(cnt4 >= 8'd1)
-                    {resp_st, resp_cmd, resp_arg, resp_r2} <= {resp_cmd, resp_arg, resp_r2, sdcmdin};
+                    {resp_st, resp_cmd, resp_arg, resp_r2} <= {resp_cmd, resp_arg, resp_r2, sdcmdin_s};
                 if(cnt4 == 8'd0) begin
                     {done, timeout} <= 2'b10;
-                    syntaxe <= resp_st || ((resp_cmd!=req_cmd) && (resp_cmd!=6'h3F) && (resp_cmd!=6'd0));
+                    syntaxe <= eff_st || ((eff_cmd!=req_cmd) && (eff_cmd!=6'h3F) && (eff_cmd!=6'd0));
                 end
             end
         end
