@@ -1078,7 +1078,7 @@ assign keyboard_addr = ppi_port_c[3:0];
                      ( config_req == 1 && config_ok == 1) ? config_dout :
                      ( config_req == 1 && config_ok == 0) ? swio_dout :
                 `endif
-                     ( kanji_driver_req == 1 ) ? ram_dout :
+                     ( menu2_req == 1 ) ? ram_dout :
                      ( kanji_data_req_r == 1 ) ? ram_dout :
                 `ifdef ENABLE_WIFI
                      ( wifi_req == 1 ) ? ram_dout :
@@ -1783,10 +1783,16 @@ assign keyboard_addr = ppi_port_c[3:0];
         subrom_logo_req <= ( bus_mreq_n == 0 && bus_rd_n == 0 && (page_num[0] == 1 || page_num[1] == 1) && pri_slot_num[SD_SLOT] == 1 && exp_slotx_num[1] == 1 ) ? 1 : 0;
     end
 
-    //kanji driver
-    reg kanji_driver_req;
+    // V3.5: SEGUNDA PAGINA DEL MENU. El menu deja de desempaquetarse en RAM y
+    // corre desde ROM como cartucho de 32 KB: pagina 1 (4000-7FFF) = la ROM de
+    // siempre del pack (0x6C000, con la FM-BIOS), pagina 2 (8000-BFFF) = una
+    // ventana NUEVA de 16 KB en la posicion que ocupaba la primera mitad del
+    // driver KANJI (pack 0x70000). El driver KANJI (CALL KANJI de BASIC, slot
+    // 0-1) desaparece del MSXimus; la FUENTE kanji (256 KB por puertos) sigue.
+    // Misma expresion que subrom_logo_req (slot 3-1) pero solo pagina 2.
+    reg menu2_req;
     always @ (posedge clk_54m) begin
-        kanji_driver_req <= ( bus_mreq_n == 0 && bus_rd_n == 0 && (page_num[1] == 1 || page_num[2] == 1) && pri_slot_num[0] == 1 && exp_slot0_num[1] == 1 ) ? 1 : 0;
+        menu2_req <= ( bus_mreq_n == 0 && bus_rd_n == 0 && page_num[2] == 1 && pri_slot_num[SD_SLOT] == 1 && exp_slotx_num[1] == 1 ) ? 1 : 0;
     end
 
 
@@ -1798,7 +1804,7 @@ assign keyboard_addr = ppi_port_c[3:0];
     wire [7:0] subrom_dout;
     wire msx_logo_req;
     wire [7:0] msx_logo_dout;
-    wire kanji_driver_req;
+    wire menu2_req;
     wire subrom_logo_req;
 
 `endif
@@ -2580,7 +2586,8 @@ assign keyboard_addr = ppi_port_c[3:0];
     //2109876 54321098 76543210
     //11111xx xxxxxxxx xxxxxxxx vram, 256 KB, bank D
     //1110111 10xxxxxx xxxxxxxx esp8266, 16 KB, 0x778000 - 0x77bfff
-    //1110111 0xxxxxxx xxxxxxxx kanji driver, 32 KB, 0x770000 - 0x777fff
+    //1110111 00xxxxxx xxxxxxxx 2a pagina del menu (slot 3-1 pag.2), 16 KB, 0x770000 - 0x773fff (V3.5; era la 1a mitad del driver kanji)
+    //1110111 01xxxxxx xxxxxxxx reserva, 16 KB, 0x774000 - 0x777fff (era la 2a mitad del driver kanji; el pack la deja a FF)
     //1110110 11xxxxxx xxxxxxxx fm + logo + boot menu, 16 KB, 0x76c000 - 0x76ffff
     //1110110 10xxxxxx xxxxxxxx msx2+ subrom, 16 KB, 0x768000 - 0x76bfff
     //1110110 0xxxxxxx xxxxxxxx msx2+ bios, 32 KB, 0x760000 - 0x767fff
@@ -2606,7 +2613,7 @@ assign keyboard_addr = ppi_port_c[3:0];
                         (megarom_req == 1 ) ? { 6'b111010, megarom_addr[16:0] } : //bank D
                 `endif
                         (megaram_req == 1 ) ? { ~megaram_addr[21], megaram_addr[21], megaram_addr[20:0] } :  //bank C (A21=0) / bank B (A21=1)
-                        (kanji_driver_req == 1 ) ? { 8'b11101110, ~bus_addr[14], bus_addr[13:0] } : //bank D
+                        (menu2_req == 1 ) ? { 8'b11101110, 1'b0, bus_addr[13:0] } : //bank D: 2a pagina del menu (pack 0x70000, V3.5)
                         (kanji_data_ram_req == 1 ) ? { 5'b11100, kanji_data_ram_addr[17:0] } : //bank D
                 `ifdef ENABLE_WIFI
                         (wifi_req == 1 ) ? { 9'b111011110, bus_addr[13:0] } : //bank D
@@ -2631,7 +2638,7 @@ assign keyboard_addr = ppi_port_c[3:0];
                 `ifdef ENABLE_SDCARD
                       megarom_req |
                 `endif
-                      megaram_req | kanji_driver_req | kanji_data_ram_req |
+                      megaram_req | menu2_req | kanji_data_ram_req |
                 `ifdef ENABLE_WIFI
                       wifi_req |
                 `endif
@@ -2641,7 +2648,7 @@ assign keyboard_addr = ppi_port_c[3:0];
                 `ifdef ENABLE_SDCARD
                       megarom_req |
                 `endif
-                      megaram_req | kanji_driver_req | kanji_data_ram_req |
+                      megaram_req | menu2_req | kanji_data_ram_req |
                 `ifdef ENABLE_WIFI
                       wifi_req |
                 `endif
