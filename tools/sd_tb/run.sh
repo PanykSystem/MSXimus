@@ -1,5 +1,6 @@
 #!/bin/bash
-# Banco del sd_reader (V3.5) contra el modelo de tarjeta SD.
+# Banco del sd_reader (V3.5 / V3.5c multibloque) contra el modelo de tarjeta SD,
+# mas el banco del sdc_ioport (puertos de E/S).
 # Uso (desde Windows):
 #   wsl.exe -d Ubuntu-24.04 bash -lc "cd /mnt/c/Users/alber/proyectosAI/msx/MSX_up_v3/tools/sd_tb && bash run.sh"
 # Corre tres variantes: 6,75 MHz con TOD=14 ns (spec), 6,75 MHz con TOD=60 ns
@@ -16,5 +17,17 @@ run_one () {
 run_one 0 14
 run_one 0 60
 run_one 4 14
+echo "---- sdc_ioport ----"
+iverilog -g2012 -o tb_sdio.vvp tb_sdio.sv $SRC/sdc_ioport.sv
+vvp -n tb_sdio.vvp | tee log_sdio.txt | grep -v -E '^\s*$'
+echo "---- cronometro de ms ----"
+iverilog -g2012 -o tb_mstimer.vvp tb_mstimer.sv $SRC/sdc_ioport.sv
+vvp -n tb_mstimer.vvp | tee log_mstimer.txt | grep -v -E '^\s*$'
+echo "---- pegamento bus/puertos/ventana ----"
+iverilog -g2012 -o tb_glue.vvp tb_glue.sv $SRC/sdc_ioport.sv
+vvp -n tb_glue.vvp | tee log_glue.txt | grep -v -E '^\s*$'
 echo "---- resumen ----"
-grep -h -E '^=== tb_sd .*(TODO OK|FALLOS)' log_*.txt
+grep -h -E '^=== tb_sd .*(TODO OK|FALLOS)' log_[0-9]*.txt
+grep -h -E '^=== tb_sdio:' log_sdio.txt
+grep -h -E '^=== tb_mstimer:' log_mstimer.txt
+grep -h -E '^=== tb_glue:' log_glue.txt

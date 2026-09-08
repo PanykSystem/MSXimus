@@ -234,6 +234,12 @@ module sd_card_model #(
         end
     endtask
 
+    // ---------------- multibloque (V3.5c) ----------------
+    reg        multi_rd  = 1'b0;     // CMD18 en curso: tras cada bloque viene otro (hasta CMD12)
+    integer    rd_sector = 0;
+    reg        wr_multi  = 1'b0;     // CMD25 en curso: tras cada bloque se espera otro (hasta CMD12)
+    integer    n_cmd18 = 0, n_cmd25 = 0;
+
     // ---------------- receptor de escritura (DAT0) ----------------
     reg        wr_armed = 1'b0;      // esperando el start bit del host
     reg        wr_active = 1'b0;
@@ -288,7 +294,7 @@ module sd_card_model #(
             end else begin
                 // end bit: veredicto
                 wr_active <= 1'b0;
-                wr_armed  <= 1'b0;
+                wr_armed  <= wr_multi;          // V3.5c: en CMD25 se sigue esperando bloques
                 n_writes  <= n_writes + 1;
                 if (reject_writes > 0) begin
                     reject_writes = reject_writes - 1;
@@ -301,6 +307,7 @@ module sd_card_model #(
                     for (i = 0; i < 512; i = i + 1) mem[wr_sector*512 + i] = wr_buf[i];
                     queue_status_token(3'b010);
                 end
+                if (wr_multi) wr_sector = (wr_sector + 1) % NSEC;   // V3.5c: siguiente sector
             end
             wr_idx <= wr_idx + 1;
         end
@@ -358,8 +365,30 @@ module sd_card_model #(
                         wr_sector = carg % NSEC;
                         wr_armed  = 1'b1;
                     end
+                    6'd18: begin                                // V3.5c: READ_MULTIPLE_BLOCK
+                        resp_r1(6'd18, 32'h00000900);
+                        n_cmd18   = n_cmd18 + 1;
+                        rd_sector = carg;
+                        multi_rd  = 1'b1;
+                        if (!no_data) begin
+                            n_reads = n_reads + 1;
+                            queue_block(rd_sector % NSEC);
+                        end
+                    end
+                    6'd25: begin                                // V3.5c: WRITE_MULTIPLE_BLOCK
+                        resp_r1(6'd25, 32'h00000900);
+                        n_cmd25   = n_cmd25 + 1;
+                        wr_sector = carg % NSEC;
+                        wr_multi  = 1'b1;
+                        wr_armed  = 1'b1;
+                    end
                     6'd12: begin
                         n_cmd12 = n_cmd12 + 1;
+                        multi_rd = 1'b0;                        // V3.5c: STOP corta el flujo
+                        wr_multi = 1'b0;
+                        wr_armed = 1'b0;
+                        dtx_len  = 0;                           // lo que quedara por mandar, fuera
+                        dtx_pos  = 0;
                         if (!no_resp12) begin
                             resp_r1(6'd12, 32'h00000900);
                             busy_left = 4;
@@ -396,6 +425,14 @@ module sd_card_model #(
             busy_left = busy_left - 1;
             dat_oe <= #(tod_ns) 1'b1;
             dat_o  <= #(tod_ns) 1'b0;
+        end else if (multi_rd && dtx_len != 0 && !no_data) begin
+            // V3.5c: CMD18: el bloque siguiente sale NAC ciclos despues del end bit
+            // del anterior. Si el host para el reloj, no hay flancos y esto espera.
+            rd_sector = rd_sector + 1;
+            n_reads   = n_reads + 1;
+            queue_block(rd_sector % NSEC);
+            dtx_delay = NAC;
+            dat_oe <= #(tod_ns) 1'b0;
         end else begin
             dat_oe <= #(tod_ns) 1'b0;
         end

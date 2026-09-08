@@ -17,6 +17,11 @@ module sdcmd_ctrl (
     output reg          sdcmdoe,
     // config clk freq
     input  wire  [15:0] clkdiv,
+    // V3.5c: parar sdclk (en nivel BAJO) mientras hold=1. Lo usa el multibloque
+    // (CMD18) entre bloque y bloque: con un solo bufer de 512 B, la tarjeta no
+    // puede seguir mandando hasta que el Z80 lo haya vaciado, y la spec permite
+    // parar el reloj en cualquier momento de la transferencia de datos.
+    input  wire         hold,
     // user input signal
     input  wire         start,
     input  wire  [15:0] precnt,
@@ -114,7 +119,13 @@ always @ (posedge clk or negedge rstn)
     end else begin
         {done, timeout, syntaxe} <= 0;
         
-        clkcnt <= ( clkcnt < {clkdivr[16:0],1'b1} ) ? (clkcnt+18'd1) : 18'd0;
+        // V3.5c: con hold, el contador se congela justo despues del flanco de
+        // bajada (clkcnt == clkdivr+1, sdclk ya a 0) y ahi se queda: ni flancos
+        // ni muestreo hasta que hold baje. El resto del ciclo no cambia.
+        if (hold && ~sdclk && clkcnt == clkdivr + 18'd1)
+            clkcnt <= clkcnt;
+        else
+            clkcnt <= ( clkcnt < {clkdivr[16:0],1'b1} ) ? (clkcnt+18'd1) : 18'd0;
         
         if     (clkcnt == 18'd0)
             clkdivr <= {2'h0, clkdiv} + 18'd1;

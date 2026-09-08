@@ -984,7 +984,8 @@ assign keyboard_addr = ppi_port_c[3:0];
     // 0x30, arrancar este bitstream con el pack_bios_v2.1b da un aviso de
     // version desemparejada. Es cosmetico -- el sistema arranca igual -- pero
     // hay que cerrarlo antes de publicar la 3.0.
-    localparam [7:0] FPGA_VERSION = 8'h30;
+    // V3.5 (06/09/2026): 0x30 -> 0x35. Ajustes lo muestra como "3.5".
+    localparam [7:0] FPGA_VERSION = 8'h35;
     wire ver_req_r = (bus_iorq_n == 1'b0 && bus_m1_n == 1'b1 && bus_rd_n == 1'b0 && bus_addr[7:0] == 8'h2F);
 
     // Puerto 0x2E — DIAGNOSTICO DEL RATON. Desde BASIC: PRINT HEX$(INP(&H2E))
@@ -4339,7 +4340,8 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
 `endif
 
     localparam CONFIG1_DEFAULT = 8'hf3;  // bit3=0 -> Scanlines OFF by default (was 0xfb)
-    localparam CONFIG2_DEFAULT = 8'h07;  // bit3=0 -> Compatible Mode (extra wait) OFF by default (was 0x0f)
+    localparam CONFIG2_DEFAULT = 8'h0f;  // V3.5: bit3 = "Menu al arrancar" (el menu lo guarda en flash): ON por defecto
+                                         // en una flash virgen o tras el rescate S2. (Antes bit3 era "Compatible Mode"; el RTL ya no lo mira.)
 
 `ifdef ENABLE_CONFIG
     //config
@@ -4518,7 +4520,11 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
                          ( bus_addr[3:0] == 4'h3 ) ? config3_ff :
                          ( bus_addr[3:0] == 4'h4 ) ? {5'b0, snd_gain_ff} :
                          ( bus_addr[3:0] == 4'h5 ) ? {7'b0, config_turbo_boot_ff} :
-                         ( bus_addr[3:0] == 4'h6 ) ? config6_ff : 8'hff;
+                         ( bus_addr[3:0] == 4'h6 ) ? config6_ff :
+                `ifdef ENABLE_SDCARD
+                         ( bus_addr[3:0] >= 4'h7 ) ? sdio_dout :     // V3.5c: #47-#4F = SD por puertos
+                `endif
+                         8'hff;
 
 
     always @ (posedge clk_54m) begin
@@ -5004,23 +5010,141 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     wire sd_crc_error_w;
     wire sd_rcrc_error_w;   // V3.5: CRC16 de lectura mal (bit2 de SDC_STATUS)
     wire sd_timeout_error_w;
+    // ---- V3.5c: SD por PUERTOS DE E/S (#47-#4F del dispositivo goauld #48) + multibloque ----
+    // La ventana de memoria sigue igual. Ver sdc_ioport.sv para el mapa de puertos.
+    wire       sd_blk_rdy_w;
+    wire       sdio_cmd_wr;
+    wire [7:0] sdio_cmd_val;
+    wire [3:0] sdio_saddr_wr;
+    wire [7:0] sdio_saddr_val;
+    wire       sdio_data_sel;
+    wire       sdio_data_wr;
+    wire [7:0] sdio_data_val;
+    wire [8:0] sdio_ptr;
+    wire       sdio_ack;
+    wire [7:0] sdio_count;
+    wire [4:0] sdio_idx;
+    // V3.5d: la seleccion del dispositivo va REGISTRADA. Combinacional colgaba
+    // MAS CARGA del IORQ_n del Z80, que es de donde salen los peores caminos del
+    // chip desde siempre (los CE de config2/config6/snd_gain, clk_54m->clk_27m):
+    // el dado 3187 se fue a -1,55 ns con ellos. Registrarlo no cambia nada
+    // funcional -- un ciclo de clk_27m contra un ciclo de E/S de ~30.
+    reg        sdio_sel = 1'b0;
+    always @(posedge clk_27m) begin
+        sdio_sel <= (config_enable_sdcard == 1) && (config_ok == 1) && (bus_iorq_n == 0) && (bus_m1_n == 1) && (bus_addr[7:4] == 4'h4);
+    end
+    reg        sd_win_cmd_wr  = 1'b0;      // orden dada por la ventana de memoria (-> count = 1)
+    reg  [7:0] sd_win_cmd_val = 8'd0;      // ... y su dato, capturado en el mismo flanco
+    sdc_ioport u_sdio (
+        .clk(clk_27m),
+        .rstn(bus_reset_n),
+        .sel(sdio_sel),
+        .addr(bus_addr[3:0]),
+        .rd_n(bus_rd_n),
+        .wr_n(bus_wr_n),
+        .din(cpu_dout),
+        .force1(sd_win_cmd_wr),
+        .cmd_wr(sdio_cmd_wr),
+        .cmd_val(sdio_cmd_val),
+        .saddr_wr(sdio_saddr_wr),
+        .saddr_val(sdio_saddr_val),
+        .data_sel(sdio_data_sel),
+        .data_wr(sdio_data_wr),
+        .data_val(sdio_data_val),
+        .ptr(sdio_ptr),
+        .buf_ack(sdio_ack),
+        .count(sdio_count),
+        .info_idx(sdio_idx)
+    );
+    // estado por puerto: bit7 busy · bit4 bloque listo/bufer libre (multibloque) ·
+    // bit3 SIEMPRE 1 (sonda: un core sin puertos devuelve FFh en #47, con los bits 6:5 a 1)
+    wire [7:0] sd_io_status = { sd_busy_w | sd_wr_hold | sd_wr_fail, 2'b00, sd_blk_rdy_w, 1'b1, sd_rcrc_error_w, sd_timeout_error_w, sd_crc_error_w };
+    // Byte de informacion #4E. Mismo mapa que la ventana (offset desde
+    // SDC_ENABLE), pero SOLO lo que alguien lee de verdad por aqui: el CID/CSD
+    // completo (MID/OID/PNM/PSN, indices 13-24) lo saca el driver de Nextor por
+    // la VENTANA, y replicarlo aqui eran 12 entradas mas de un mux de 8 bits en
+    // un chip que ya va al 98% de CLS y con las campanas fallando de rutado.
+    wire [7:0] sd_info_dout = (sdio_idx == 5'd2)  ? sd_io_status :
+                              (sdio_idx == 5'd7)  ? sd_c_size_w[7:0] :
+                              (sdio_idx == 5'd8)  ? sd_c_size_w[15:8] :
+                              (sdio_idx == 5'd9)  ? { 2'b0, sd_c_size_w[21:16] } :
+                              (sdio_idx == 5'd10) ? { 5'b0, sd_c_size_mult_w } :
+                              (sdio_idx == 5'd11) ? { 4'b0, sd_read_bl_len_w } :
+                              (sdio_idx == 5'd12) ? { 6'b0, sd_card_type_w } :
+                              // V3.5d: cronometro de ms (foto congelada al pedir el 25)
+                              (sdio_idx == 5'd25) ? ms_snap[7:0] :
+                              (sdio_idx == 5'd26) ? ms_snap[15:8] :
+                              (sdio_idx == 5'd27) ? ms_snap[23:16] :
+                              (sdio_idx == 5'd28) ? 8'h54 : 8'hFF;   // firma 'T' = hay cronometro
+    // ---- V3.5d: CRONOMETRO LIBRE DE MILISEGUNDOS ----------------------------
+    // POR QUE: el menu media la carga con el JIFFY de la BIOS (#FC9E), que solo
+    // avanza con las interrupciones ACTIVAS; la carga corre con DI, asi que el
+    // reloj se congelaba y salian cifras imposibles (2730 KB/s en placa el
+    // 06/09, 16 veces el techo fisico del Z80). Este contador va con clk_27m y
+    // no depende de nada del MSX.
+    //
+    // Se lee por el puerto de informacion que ya existe (#4E, sin decode nuevo):
+    //   OUT #4E,25  -> CONGELA los 24 bits (lectura atomica) y devuelve el byte 0
+    //   OUT #4E,26 / 27 -> bytes 1 y 2 de ESA MISMA foto
+    //   OUT #4E,28  -> firma 'T' (0x54): un core sin cronometro devuelve FF
+    reg [14:0] ms_div = 15'd0;
+    reg [23:0] ms_cnt = 24'd0;
+    reg [23:0] ms_snap = 24'd0;
+    // La foto se congela mirando el indice YA REGISTRADO (sdio_idx), no el bus:
+    // asi el disparo es puramente sincrono en clk_27m y no cuelga un camino del
+    // IORQ_n del Z80, que es justo lo que se llevo por delante el margen del
+    // dado 3191 por el lado del bufer.
+    reg [4:0] ms_idx_d = 5'd0;
+    always @(posedge clk_27m or negedge bus_reset_n) begin
+        if (~bus_reset_n) begin
+            ms_div   <= 15'd0;
+            ms_cnt   <= 24'd0;
+            ms_snap  <= 24'd0;
+            ms_idx_d <= 5'd0;
+        end else begin
+            if (ms_div == 15'd26999) begin
+                ms_div <= 15'd0;
+                ms_cnt <= ms_cnt + 24'd1;
+            end else
+                ms_div <= ms_div + 15'd1;
+            ms_idx_d <= sdio_idx;
+            if (sdio_idx == 5'd25 && ms_idx_d != 5'd25) ms_snap <= ms_cnt;
+        end
+    end
+
+    // Lo que devuelven las lecturas de #47-#4F (config_dout las toma de aqui).
+    // El TAMANO de la tarjeta se lee por #4E con los indices 7-9, asi que las
+    // copias que habia en #49-#4B sobraban: tres entradas menos de un mux de 8
+    // bits, que en este chip (97-98% de CLS y campanas cayendose de rutado) es
+    // justo lo que conviene no gastar.
+    wire [7:0] sdio_dout = (bus_addr[3:0] == 4'h7) ? sd_io_status :
+                           (bus_addr[3:0] == 4'h8) ? { 6'b0, sd_card_type_w } :
+                           (bus_addr[3:0] == 4'hD) ? sdio_count :
+                           (bus_addr[3:0] == 4'hE) ? sd_info_dout :
+                           (bus_addr[3:0] == 4'hF) ? sdio_ptr[7:0] : 8'hFF;
+    // un CMD17/CMD24 dado por la ventana o el puerto se reintenta solo (3 veces) si la
+    // tarjeta lo rechaza; en multibloque NO: el driver retoma desde el bloque que fallo
+    wire       sd_single = (sdio_count <= 8'd1);
     //reg ff_scc_enable;
     //wire scc_enable_w;
     //assign scc_enable_w = ff_scc_enable;
     always @ (posedge clk_27m) begin
         sram_cs_w <= config_enable_sdcard == 1 && bus_reset_n && ff_sd_en && bus_iorq_n == 1 && bus_m1_n == 1 && bus_mreq_n == 0 && pri_slot_num[SD_SLOT] == 1 && exp_slotx_num[2] == 1 && ( bus_addr >= SDC_SDATA && bus_addr < SDC_ENABLE) ? 1 : 0;
     end
-    assign sram_busreq_w = sram_cs_w && ~bus_rd_n;
+    assign sram_busreq_w = (sram_cs_w && ~bus_rd_n) || (sdio_data_sel && ~bus_rd_n);   // V3.5c: IN #4C lee el bufer
     
     dpram#(
         .widthad_a(9),
         .width_a(8)
     ) dpram1 (
         .clock_a(clk_27m),
-        .wren_a(bus_clk_3m6_27 && sram_cs_w && ~bus_wr_n),
-        .rden_a(bus_clk_3m6_27 && sram_cs_w && ~bus_rd_n),
-        .address_a(bus_addr[8:0]),
-        .data_a(cpu_dout),
+        // V3.5c: el puerto #4C accede al mismo bufer con el puntero de sdc_ioport
+        // (estable durante todo el ciclo IN/OUT; se repite la escritura del mismo
+        // byte en la misma direccion mientras dura el OUT, que es inocuo)
+        .wren_a((bus_clk_3m6_27 && sram_cs_w && ~bus_wr_n) || sdio_data_wr),
+        .rden_a((bus_clk_3m6_27 && sram_cs_w && ~bus_rd_n) || (sdio_data_sel && ~bus_rd_n)),
+        .address_a(sdio_data_sel ? sdio_ptr : bus_addr[8:0]),
+        .data_a(sdio_data_wr ? sdio_data_val : cpu_dout),   // V3.5d: dato capturado en el modulo
         .q_a(sram_cd_w),
     
         .clock_b(clk_27m),
@@ -5077,7 +5201,11 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .crc_error(sd_crc_error_w),
         .rcrc_error(sd_rcrc_error_w),
         .timeout_error(sd_timeout_error_w),
-        .init(ff_sd_init)
+        .init(ff_sd_init),
+        // V3.5c: multibloque (CMD18/CMD25) gobernado desde los puertos de E/S
+        .rcount(sdio_count),
+        .buf_ack(sdio_ack),
+        .blk_rdy(sd_blk_rdy_w)
     );
     
     assign sd_dat1 = 1;
@@ -5097,6 +5225,18 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     reg sd_cs_w;
     always @ (posedge clk_27m) begin
         sd_cs_w <= config_enable_sdcard == 1 && bus_reset_n && ff_sd_en && bus_iorq_n && bus_m1_n && bus_mreq_n == 0 && pri_slot_num[SD_SLOT] == 1 && exp_slotx_num[2] == 1 && (bus_addr >= SDC_ENABLE && bus_addr <= SDC_END) ? 1 : 0;
+    end
+    // V3.5c/d: orden dada por la VENTANA. Registrada, por lo mismo que todo lo
+    // del modulo de puertos: sin registrar, este termino colgaba del WR_n del
+    // Z80 y llegaba al CE de sd_wr_fail (-0,791 ns en el dado 3209).
+    always @(posedge clk_27m or negedge bus_reset_n) begin
+        if (~bus_reset_n) begin
+            sd_win_cmd_wr  <= 1'b0;
+            sd_win_cmd_val <= 8'd0;
+        end else begin
+            sd_win_cmd_wr  <= sd_cs_w && ~bus_wr_n && (bus_addr == SDC_CMD);
+            if (sd_cs_w && ~bus_wr_n && (bus_addr == SDC_CMD)) sd_win_cmd_val <= cpu_dout;
+        end
     end
     wire sd_busreq_w;
     assign sd_busreq_w = sd_cs_w && ~bus_rd_n;
@@ -5136,14 +5276,14 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     wire sd_tmo_edge     = sd_timeout_error_w && !sd_tmo_d;
     wire sd_wr_done_edge = sd_done_edge && ff_sd_wstart;
     wire sd_rd_done_edge = sd_done_edge && ff_sd_rstart && !ff_sd_wstart;
-    wire sd_wr_rechazado = sd_wr_done_edge && sd_crc_error_w && !sd_timeout_error_w;
+    wire sd_wr_rechazado = sd_wr_done_edge && sd_crc_error_w && !sd_timeout_error_w && sd_single;   // V3.5c: solo monobloque
     wire sd_wr_again     = sd_wr_rechazado && (sd_wretry != 2'd3);
     wire sd_wr_giveup    = sd_wr_rechazado && (sd_wretry == 2'd3);
     // V3.5: lectura con CRC16 mal -> repetir el CMD17 (hasta 3 veces), igual que
     // el token de escritura. Si aun asi falla, la lectura TERMINA (no se deja
     // busy pegado: el dato puede ser malo, y bit2 de SDC_STATUS lo dice) para
     // que un driver que no mira bit2 se comporte exactamente como hasta hoy.
-    wire sd_rd_rechazado = sd_rd_done_edge && sd_rcrc_error_w && !sd_timeout_error_w;
+    wire sd_rd_rechazado = sd_rd_done_edge && sd_rcrc_error_w && !sd_timeout_error_w && sd_single;   // V3.5c: solo monobloque
     wire sd_rd_again     = sd_rd_rechazado && (sd_rretry != 2'd3);
     wire sd_again        = sd_wr_again | sd_rd_again;
 
@@ -5187,7 +5327,20 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
             // SD_STATUS=3 y la descarga aborta CON ERROR VISIBLE, en vez de
             // seguir y dejar el fichero corrupto en silencio.
             if (sd_wr_giveup) sd_wr_fail <= 1'b1;
-            else if (sd_cs_w && ~bus_wr_n && bus_addr == SDC_CMD) sd_wr_fail <= 1'b0;
+            else if (sd_win_cmd_wr || sdio_cmd_wr) sd_wr_fail <= 1'b0;
+
+            // V3.5c: la misma orden y el mismo LBA, por los puertos #47-#4B.
+            // V3.5d: el dato viene YA CAPTURADO del modulo (sdio_*_val): aqui no
+            // se vuelve a mirar el bus, que es lo que colgaba los caminos malos.
+            if (sdio_cmd_wr) begin
+                ff_sd_rstart <= ff_sd_rstart | sdio_cmd_val[0];
+                ff_sd_wstart <= ff_sd_wstart | sdio_cmd_val[1];
+                ff_sd_init   <= ff_sd_init   | sdio_cmd_val[7];
+            end
+            if (sdio_saddr_wr[0]) ff_sd_sector[ 7: 0] <= sdio_saddr_val;
+            if (sdio_saddr_wr[1]) ff_sd_sector[15: 8] <= sdio_saddr_val;
+            if (sdio_saddr_wr[2]) ff_sd_sector[23:16] <= sdio_saddr_val;
+            if (sdio_saddr_wr[3]) ff_sd_sector[31:24] <= sdio_saddr_val;
 
             // Los strobes se sueltan en el FLANCO de done o de timeout, nunca
             // por nivel. Un reintento (sd_again) los conserva para que IDLING
@@ -5196,15 +5349,28 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
                 ff_sd_rstart <= '0;
                 ff_sd_wstart <= '0;
             end
-    
+
+            // V3.5d (07/09, doble check): la orden por la VENTANA va por el MISMO
+            // strobe registrado que pone count=1 en el modulo (force1), y con su
+            // dato capturado en el mismo flanco. POR QUE: al registrar
+            // sd_win_cmd_wr, rstart (que se ponia aqui abajo, en el case, desde
+            // el bus) iba UN CICLO POR DELANTE de count, y sd_reader elige
+            // CMD17/CMD18 en el mismo flanco en que ve rstart: tras un cluster
+            // por puertos (count=64) la lectura de la FAT por ventana habria
+            // salido como CMD18 sin CMD12 -- la tarjeta se queda en rafaga y
+            // todo lo siguiente lee basura. Con el 3169 (force1 combinacional)
+            // no pasaba; con el 3257 si. Por eso el 3257 no se entrega.
+            if (sd_win_cmd_wr) begin
+                ff_sd_rstart <= ff_sd_rstart | sd_win_cmd_val[0];
+                ff_sd_wstart <= ff_sd_wstart | sd_win_cmd_val[1];
+                ff_sd_init   <= ff_sd_init   | sd_win_cmd_val[7];
+            end
+
             if (sd_cs_w) begin
                 if (~bus_wr_n) begin
                     case(bus_addr) 
                         SDC_CMD: begin
-                            ff_sd_rstart <= ff_sd_rstart | cpu_dout[0];
-                            ff_sd_wstart <= ff_sd_wstart | cpu_dout[1];
-                            ff_sd_init   <= ff_sd_init   | cpu_dout[7];
-                            //ff_sms_init  <= ff_sms_init  | cdin_w[7];
+                            // V3.5d: ver sd_win_cmd_wr, justo arriba
                         end
                         SDC_SADDR+0:    ff_sd_sector[ 7: 0] <= cpu_dout;
                         SDC_SADDR+1:    ff_sd_sector[15: 8] <= cpu_dout;
@@ -5216,7 +5382,8 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
                     case(bus_addr) 
                         SDC_ENABLE:     ff_sd_cd <= { 7'b0, ff_sd_en };
                         // bit7 busy · bit2 CRC de LECTURA mal (V3.5) · bit1 timeout · bit0 token de escritura rechazado
-                        SDC_STATUS:     ff_sd_cd <= { sd_busy_w | sd_wr_hold | sd_wr_fail, 4'b0, sd_rcrc_error_w, sd_timeout_error_w, sd_crc_error_w };
+                        // (V3.5c: bit4 = bloque listo / bufer libre del multibloque; bit3 queda a 0 en la ventana)
+                        SDC_STATUS:     ff_sd_cd <= { sd_busy_w | sd_wr_hold | sd_wr_fail, 2'b0, sd_blk_rdy_w, 1'b0, sd_rcrc_error_w, sd_timeout_error_w, sd_crc_error_w };
                         SDC_C_SIZE+0:   ff_sd_cd <= sd_c_size_w[7:0];
                         SDC_C_SIZE+1:   ff_sd_cd <= sd_c_size_w[15:8];
                         SDC_C_SIZE+2:   ff_sd_cd <= { 2'b0, sd_c_size_w[21:16] };
@@ -5246,6 +5413,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
 
     wire sd_busreq_w;
     wire sram_busreq_w;
+    wire sdio_data_sel = 1'b0;      // V3.5c: sin SD no hay puertos
     wire megarom_req;
     wire megarom_page_req;
     wire sram_cs_w;

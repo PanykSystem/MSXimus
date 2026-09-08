@@ -112,6 +112,7 @@ add_file src/wondertang/dpram.v
 add_file src/wondertang/pinfilter.v
 add_file src/wondertang/sd_reader.sv
 add_file src/wondertang/sdcmd_ctrl.sv
+add_file src/wondertang/sdc_ioport.sv
 # ----- F1 V9968: variable del build (0 = VDP clasico tn_vdp, 1 = V9968).
 # DEBE ir en sintonia con el `define ENABLE_V9968_VDP de top.v (el clon del
 # build _117+ pone ambos a 1 via sed). Los hdmi/*.sv van SIEMPRE (ambos

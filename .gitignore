@@ -65,3 +65,6 @@ tools/v9968_sim/s*_frame*.txt
 tools/v9968_sim/s8_glitch.txt
 tools/v9968_sim/*.raw
 tools/v9968_sim/*.ppm
+
+# Salidas de los bancos de la SD (regenerables con tools/sd_tb/run.sh)
+tools/sd_tb/log_*.txt

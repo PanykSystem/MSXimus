@@ -40,6 +40,9 @@ module tb_sd;
     reg         wstart = 1'b0;
     reg         init   = 1'b0;
     reg  [31:0] rsector = 32'd0;
+    reg  [7:0]  rcount  = 8'd1;          // V3.5c: bloques de la orden
+    reg         buf_ack = 1'b0;          // V3.5c: el host vacio/lleno el bufer
+    wire        blk_rdy;
     wire        rbusy, rdone, outen;
     wire [8:0]  outaddr;
     wire [7:0]  outbyte;
@@ -69,7 +72,8 @@ module tb_sd;
         .c_size(c_size), .c_size_mult(c_size_mult), .read_bl_len(read_bl_len),
         .mid(mid), .oid(oid), .pnm(pnm), .psn(psn),
         .crc_error(crc_error), .rcrc_error(rcrc_error), .timeout_error(timeout_error),
-        .init(init)
+        .init(init),
+        .rcount(rcount), .buf_ack(buf_ack), .blk_rdy(blk_rdy)
     );
 
     sd_card_model card (
@@ -147,6 +151,102 @@ module tb_sd;
             repeat (10) @(posedge clk);
         end
     endtask
+
+    // ---- V3.5c: multibloque. El TB hace de host: por cada bloque espera blk_rdy
+    // (o el final), copia/llena el bufer y manda buf_ack, como hara el Z80 por
+    // el puerto #4C (el ack sale solo al pasar por el byte 511).
+    reg [7:0] mbuf [0:7][0:511];        // bloques leidos en multibloque
+    integer   mblocks = 0;              // bloques que el host llego a recoger
+    integer   mrdy = 0;                 // veces que vio blk_rdy
+
+    task do_multi_read;
+        input [31:0] sec;
+        input integer n;
+        integer k, j, w;
+        begin
+            rsector = sec; rcount = n[7:0]; mblocks = 0; mrdy = 0;
+            @(posedge clk); rstart = 1'b1;
+            w = 0; while (!rbusy && w < 100) begin @(posedge clk); w = w + 1; end
+            k = 0;
+            while (k < n) begin
+                w = 0; while (!blk_rdy && !rdone && !timeout_error && w < 20000000) begin @(posedge clk); w = w + 1; end
+                repeat (3) @(posedge clk);                       // el ultimo byte ya esta en rbuf
+                for (j = 0; j < 512; j = j + 1) mbuf[k][j] = rbuf[j];
+                mblocks = k + 1;
+                k = k + 1;
+                if (blk_rdy) begin
+                    mrdy = mrdy + 1;
+                    @(posedge clk); buf_ack = 1'b1; @(posedge clk); buf_ack = 1'b0;
+                end else
+                    k = n;                                       // fin (ultimo bloque o error)
+            end
+            w = 0; while (!rdone && !timeout_error && w < 20000000) begin @(posedge clk); w = w + 1; end
+            @(posedge clk); rstart = 1'b0;
+            w = 0; while (rbusy && w < 20000000) begin @(posedge clk); w = w + 1; end
+            rcount = 8'd1;
+            repeat (10) @(posedge clk);
+        end
+    endtask
+
+    task fill_wbuf;                     // bloque k: patron distinto por bloque
+        input integer k;
+        integer j;
+        begin
+            for (j = 0; j < 512; j = j + 1) wbuf[j] = (k * 8'h33 + j + 8'h5A) & 8'hFF;
+        end
+    endtask
+
+    task do_multi_write;
+        input [31:0] sec;
+        input integer n;
+        integer k, w;
+        begin
+            fill_wbuf(0);
+            rsector = sec; rcount = n[7:0]; mrdy = 0;
+            @(posedge clk); wstart = 1'b1;
+            w = 0; while (!rbusy && w < 100) begin @(posedge clk); w = w + 1; end
+            k = 1;
+            while (k < n) begin
+                w = 0; while (!blk_rdy && !rdone && !timeout_error && w < 20000000) begin @(posedge clk); w = w + 1; end
+                if (blk_rdy) begin
+                    mrdy = mrdy + 1;
+                    fill_wbuf(k);
+                    k = k + 1;
+                    @(posedge clk); buf_ack = 1'b1; @(posedge clk); buf_ack = 1'b0;
+                end else
+                    k = n;
+            end
+            w = 0; while (!rdone && !timeout_error && w < 20000000) begin @(posedge clk); w = w + 1; end
+            @(posedge clk); wstart = 1'b0;
+            w = 0; while (rbusy && w < 20000000) begin @(posedge clk); w = w + 1; end
+            rcount = 8'd1;
+            repeat (10) @(posedge clk);
+        end
+    endtask
+
+    function integer cmp_mblock;    // nº de bytes distintos entre mbuf[k] y el sector del modelo
+        input integer k;
+        input integer sec;
+        integer j, m;
+        begin
+            m = 0;
+            for (j = 0; j < 512; j = j + 1)
+                if (mbuf[k][j] !== card.mem[(sec % 16)*512 + j]) m = m + 1;
+            cmp_mblock = m;
+        end
+    endfunction
+
+    function integer cmp_wpat;      // nº de bytes del sector del modelo distintos del patron del bloque k
+        input integer k;
+        input integer sec;
+        integer j, m;
+        begin
+            m = 0;
+            for (j = 0; j < 512; j = j + 1)
+                if (card.mem[(sec % 16)*512 + j] !== ((k * 8'h33 + j + 8'h5A) & 8'hFF)) m = m + 1;
+            cmp_wpat = m;
+        end
+    endfunction
 
     function integer cmp_read;      // nº de bytes distintos entre rbuf y el sector del modelo
         input integer sec;
@@ -250,6 +350,58 @@ module tb_sd;
         do_read(32'd3);
         check(cmp_read(3) == 0,   "T7 recuperacion: lectura normal despues del timeout");
         check(timeout_error == 1'b0, "T7 recuperacion: timeout_error se limpia");
+
+        // ---------------- T9: lectura multibloque (CMD18, 4 bloques) ----------------
+        card.n_cmd12 = 0;
+        do_multi_read(8, 4);
+        check(card.n_cmd18 == 1,  "T9 CMD18: un solo comando de lectura para 4 bloques");
+        check(card.n_cmd12 == 1,  "T9 CMD18: cerrado con UN CMD12");
+        check(mrdy == 3,          "T9 CMD18: blk_rdy 3 veces (los 3 primeros bloques)");
+        check(mblocks == 4,       "T9 CMD18: el host recogio 4 bloques");
+        check(cmp_mblock(0, 8) == 0 && cmp_mblock(1, 9) == 0 && cmp_mblock(2, 10) == 0 && cmp_mblock(3, 11) == 0,
+                                  "T9 CMD18: los 4 bloques = sectores 8..11 del modelo");
+        check(rcrc_error == 1'b0 && timeout_error == 1'b0, "T9 CMD18: sin errores");
+        check(dut.sdcmd_stat == 5'd17 && rbusy == 1'b0, "T9 CMD18: vuelve a IDLING");
+        check(dut.clk_hold == 1'b0, "T9 CMD18: el reloj no se queda parado");
+
+        // ---------------- T10: escritura multibloque (CMD25, 3 bloques) ----------------
+        card.n_cmd12 = 0;
+        do_multi_write(12, 3);
+        check(card.n_cmd25 == 1,  "T10 CMD25: un solo comando de escritura para 3 bloques");
+        check(card.n_cmd12 == 1,  "T10 CMD25: cerrado con UN CMD12");
+        check(mrdy == 2,          "T10 CMD25: blk_rdy 2 veces (bufer libre tras los bloques 1 y 2)");
+        check(cmp_wpat(0, 12) == 0 && cmp_wpat(1, 13) == 0 && cmp_wpat(2, 14) == 0,
+                                  "T10 CMD25: el modelo guardo los 3 bloques en 12..14");
+        check(crc_error == 1'b0 && timeout_error == 1'b0, "T10 CMD25: sin errores");
+        check(dut.sdcmd_stat == 5'd17 && rbusy == 1'b0, "T10 CMD25: vuelve a IDLING tras el busy final");
+        check(card.n_write_crc_bad == 1, "T10 CMD25: CRC16 del host correcto en los 3 bloques");
+
+        // ---------------- T11: CMD18 con un bit corrupto en el 2o bloque ----------------
+        card.n_cmd12 = 0;
+        // el modelo consume corrupt_read_bit al ENCOLAR cada bloque, y encola el
+        // siguiente nada mas acabar el anterior (antes de que el host vea blk_rdy):
+        // para corromper el 2o hay que fijarlo justo despues del CMD18 (que encola
+        // el 1o). Se hace desde un proceso paralelo.
+        fork
+            begin
+                wait (card.n_cmd18 == 2);            // el CMD18 de esta prueba ya encolo el 1er bloque
+                card.corrupt_read_bit = 100;         // el siguiente que se encole (el 2o) ira mal
+            end
+            do_multi_read(3, 4);
+        join
+        check(rcrc_error == 1'b1,  "T11 CMD18 bloque 2 corrupto: rcrc_error=1");
+        check(mblocks == 2,        "T11 CMD18 bloque 2 corrupto: el host recogio 2 bloques y paro");
+        check(cmp_mblock(0, 3) == 0, "T11 CMD18: el 1er bloque llego bien");
+        check(cmp_mblock(1, 4) == 1, "T11 CMD18: el 2o bloque tiene exactamente 1 byte mal");
+        check(card.n_cmd12 == 1,   "T11 CMD18: se cerro con CMD12");
+        check(dut.sdcmd_stat == 5'd17 && rbusy == 1'b0, "T11 CMD18: vuelve a IDLING");
+        check(dut.clk_hold == 1'b0, "T11 CMD18: reloj en marcha");
+
+        // ---------------- T12: regresion monobloque tras el multibloque ----------------
+        do_read(5);
+        check(cmp_read(5) == 0 && rcrc_error == 1'b0, "T12 lectura CMD17 tras multibloque: bien");
+        do_write(6);
+        check(cmp_write(6) == 0 && crc_error == 1'b0, "T12 escritura CMD24 tras multibloque: bien");
 
         // ---------------- T8: salud del enlace ----------------
         check(card.n_cmd_crc_bad == 0, "T8 el modelo no vio comandos mal formados (CRC7 ok)");
