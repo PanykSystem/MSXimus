@@ -985,7 +985,7 @@ assign keyboard_addr = ppi_port_c[3:0];
     // version desemparejada. Es cosmetico -- el sistema arranca igual -- pero
     // hay que cerrarlo antes de publicar la 3.0.
     // V3.5 (06/09/2026): 0x30 -> 0x35. Ajustes lo muestra como "3.5".
-    localparam [7:0] FPGA_VERSION = 8'h35;
+    localparam [7:0] FPGA_VERSION = 8'h36;   // V3.6: DMA de la SD (el 3529 entregado aun dice 35)
     wire ver_req_r = (bus_iorq_n == 1'b0 && bus_m1_n == 1'b1 && bus_rd_n == 1'b0 && bus_addr[7:0] == 8'h2F);
 
     // Puerto 0x2E — DIAGNOSTICO DEL RATON. Desde BASIC: PRINT HEX$(INP(&H2E))
