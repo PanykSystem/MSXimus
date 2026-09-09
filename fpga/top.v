@@ -5074,8 +5074,10 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     wire [8:0] sdio_ptr;
     wire       sdio_ack;
     wire [7:0] sdio_count;
-    wire [4:0] sdio_idx;
-    wire [22:0] sdio_dma_addr;    // V3.6: destino fisico de la DMA (OUT #4F,80h + 3 bytes)
+    wire [5:0] sdio_idx;          // V3.6c: 6 bits
+    wire [22:0] sdio_dma_addr;    // V3.6: destino de la DMA (OUT #4F,80h + 3 bytes)
+    wire        sdio_dma_log;     // V3.6c: modo logico (bit7 del byte alto)
+    wire [15:0] dma_cnt_scc, dma_cnt_kon, dma_cnt_a8, dma_cnt_a16;   // V3.6c: patrones de mapper
     wire        dma_buf_rd, dma_ack;
     wire [8:0]  dma_buf_addr;
     wire [7:0]  dma_blocks;
@@ -5110,7 +5112,8 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .buf_ack(sdio_ack),
         .count(sdio_count),
         .info_idx(sdio_idx),
-        .dma_addr(sdio_dma_addr)
+        .dma_addr(sdio_dma_addr),
+        .dma_log(sdio_dma_log)
     );
     // estado por puerto: bit7 busy · bit4 bloque listo/bufer libre (multibloque) ·
     // bit3 SIEMPRE 1 (sonda: un core sin puertos devuelve FFh en #47, con los bits 6:5 a 1)
@@ -5132,7 +5135,16 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
                               (sdio_idx == 5'd26) ? ms_snap[15:8] :
                               (sdio_idx == 5'd27) ? ms_snap[23:16] :
                               (sdio_idx == 5'd28) ? 8'h54 :          // firma 'T' = hay cronometro
-                              (sdio_idx == 5'd29) ? 8'h44 : 8'hFF;   // V3.6: firma 'D' = hay DMA de lectura
+                              (sdio_idx == 6'd29) ? 8'h44 :          // V3.6: firma 'D' = hay DMA de lectura
+                              (sdio_idx == 6'd31) ? 8'h4D :          // V3.6c: firma 'M' = modo logico + contadores
+                              (sdio_idx == 6'd32) ? dma_cnt_scc[7:0] :
+                              (sdio_idx == 6'd33) ? dma_cnt_scc[15:8] :
+                              (sdio_idx == 6'd34) ? dma_cnt_kon[7:0] :
+                              (sdio_idx == 6'd35) ? dma_cnt_kon[15:8] :
+                              (sdio_idx == 6'd36) ? dma_cnt_a8[7:0] :
+                              (sdio_idx == 6'd37) ? dma_cnt_a8[15:8] :
+                              (sdio_idx == 6'd38) ? dma_cnt_a16[7:0] :
+                              (sdio_idx == 6'd39) ? dma_cnt_a16[15:8] : 8'hFF;
     // ---- V3.5d: CRONOMETRO LIBRE DE MILISEGUNDOS ----------------------------
     // POR QUE: el menu media la carga con el JIFFY de la BIOS (#FC9E), que solo
     // avanza con las interrupciones ACTIVAS; la carga corre con DI, asi que el
@@ -5279,6 +5291,13 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .rstn(bus_reset_n),
         .start(sdio_cmd_wr && sdio_cmd_val[2] && sdio_cmd_val[0]),
         .dest(sdio_dma_addr),
+        .logical(sdio_dma_log),
+        .mreg0(mapper_reg0),
+        .mreg1(mapper_reg1),
+        .mreg2(mapper_reg2),
+        .mreg3(mapper_reg3),
+        .cnt_en(sdio_cmd_val[3]),
+        .cnt_rst(sdio_cmd_val[4]),
         .bus_idle(wait_io & wait_m1 & bus_rd_n & bus_wr_n & bus_mreq_n & ex_bus_iorq_n & (ram_busy == 0)),
         .blk_rdy(sd_blk_rdy_w),
         .rbusy(sd_busy_w),
@@ -5294,7 +5313,11 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .ram_addr(dma_ram_addr),
         .ram_din(dma_ram_din),
         .blocks(dma_blocks),
-        .rfsh_ok(dma_rfsh_ok)
+        .rfsh_ok(dma_rfsh_ok),
+        .cnt_scc(dma_cnt_scc),
+        .cnt_kon(dma_cnt_kon),
+        .cnt_a8(dma_cnt_a8),
+        .cnt_a16(dma_cnt_a16)
     );
     
     assign sd_dat1 = 1;

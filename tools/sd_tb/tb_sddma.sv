@@ -30,14 +30,15 @@ module tb_sddma;
     wire [7:0] sdio_cmd_val, sdio_saddr_val, sdio_data_val, sdio_count;
     wire [3:0] sdio_saddr_wr;
     wire [8:0] sdio_ptr;
-    wire [4:0] sdio_idx;
+    wire [5:0] sdio_idx;
     wire [22:0] sdio_dma_addr;
+    wire        sdio_dma_log;
     sdc_ioport u_sdio (.clk(clk27), .rstn(rstn), .sel(sdio_sel), .addr(bus_addr[3:0]),
         .rd_n(bus_rd_n), .wr_n(bus_wr_n), .din(cpu_dout), .force1(1'b0),
         .cmd_wr(sdio_cmd_wr), .cmd_val(sdio_cmd_val), .saddr_wr(sdio_saddr_wr),
         .saddr_val(sdio_saddr_val), .data_sel(sdio_data_sel), .data_wr(sdio_data_wr),
         .data_val(sdio_data_val), .ptr(sdio_ptr), .buf_ack(sdio_ack), .count(sdio_count),
-        .info_idx(sdio_idx), .dma_addr(sdio_dma_addr));
+        .info_idx(sdio_idx), .dma_addr(sdio_dma_addr), .dma_log(sdio_dma_log));
 
     // ---- replica del pegamento: strobes y LBA ----
     reg        ff_sd_rstart = 0, ff_sd_wstart = 0, ff_sd_init = 0;
@@ -125,18 +126,24 @@ module tb_sddma;
 
     // ---- la DMA ----
     wire dma_active, dma_frz, dma_rfsh_ok;
+    reg  [7:0] mreg0 = 8'd3, mreg1 = 8'd2, mreg2 = 8'd1, mreg3 = 8'd0;   // registros del mapper (FC-FF)
+    wire [15:0] cnt_scc, cnt_kon, cnt_a8, cnt_a16;
     wire [7:0] dma_blocks;
     wire bus_idle = bus_iorq_n && !bus_mreq && bus_rd_n && bus_wr_n && (ram_busy == 0) && !hold_bus;
     sd_dma dut (
         .clk(clk54), .rstn(rstn),
         .start(sdio_cmd_wr && sdio_cmd_val[2] && sdio_cmd_val[0]),
-        .dest(sdio_dma_addr), .bus_idle(bus_idle),
+        .dest(sdio_dma_addr), .logical(sdio_dma_log),
+        .mreg0(mreg0), .mreg1(mreg1), .mreg2(mreg2), .mreg3(mreg3),
+        .cnt_en(sdio_cmd_val[3]), .cnt_rst(sdio_cmd_val[4]),
+        .bus_idle(bus_idle),
         .blk_rdy(blk_rdy), .rbusy(rbusy), .sd_err(rcrc_error | timeout_error),
         .buf_q(q_b), .ram_busy(ram_busy),
         .active(dma_active), .frz(dma_frz),
         .buf_addr(dma_buf_addr), .buf_rd(dma_buf_rd), .ack(dma_ack),
         .ram_req(dma_ram_req), .ram_addr(dma_ram_addr), .ram_din(dma_ram_din),
-        .blocks(dma_blocks), .rfsh_ok(dma_rfsh_ok));
+        .blocks(dma_blocks), .rfsh_ok(dma_rfsh_ok),
+        .cnt_scc(cnt_scc), .cnt_kon(cnt_kon), .cnt_a8(cnt_a8), .cnt_a16(cnt_a16));
 
     // ---- guardia del refresco: rfsh_ok nunca con ram_req, y >= 40 ciclos antes del 1er byte ----
     integer rfsh_viol = 0; integer rfsh_win = 0;
@@ -172,6 +179,29 @@ module tb_sddma;
     endtask
     task set_dest; input [22:0] d;
         begin io_out(8'h4F, 8'h80); io_out(8'h4F, d[7:0]); io_out(8'h4F, d[15:8]); io_out(8'h4F, {1'b0, d[22:16]}); end
+    endtask
+    task set_dest_log; input [15:0] a;                     // destino LOGICO (bit7 del byte alto)
+        begin io_out(8'h4F, 8'h80); io_out(8'h4F, a[7:0]); io_out(8'h4F, a[15:8]); io_out(8'h4F, 8'h80); end
+    endtask
+    // cuenta esperada de patrones sobre sectores seguidos (misma tabla que classify_addr)
+    integer e_scc, e_kon, e_a8, e_a16;
+    task expect_counts; input integer sec0; input integer n;
+        integer k, i; reg [7:0] b2, b1, b0;
+        begin
+            e_scc = 0; e_kon = 0; e_a8 = 0; e_a16 = 0; b2 = 0; b1 = 0;
+            for (k = 0; k < n; k = k + 1) for (i = 0; i < 512; i = i + 1) begin
+                b0 = card.mem[((sec0 + k) % 16)*512 + i];
+                if (b2 == 8'h32) begin
+                    if (b1 == 8'h00) begin
+                        if (b0 == 8'h50 || b0 == 8'h90 || b0 == 8'hB0 || b0 == 8'h70) e_scc = e_scc + 1;
+                        if (b0 == 8'h40 || b0 == 8'h80 || b0 == 8'hA0 || b0 == 8'h60) e_kon = e_kon + 1;
+                        if (b0 == 8'h68 || b0 == 8'h78 || b0 == 8'h60 || b0 == 8'h70) e_a8  = e_a8  + 1;
+                        if (b0 == 8'h60 || b0 == 8'h70) e_a16 = e_a16 + 1;
+                    end else if (b1 == 8'hFF && b0 == 8'h77) e_a16 = e_a16 + 1;
+                end
+                b2 = b1; b1 = b0;
+            end
+        end
     endtask
     task wait_frz; input want; input integer maxclk; output ok;
         integer n;
@@ -272,6 +302,48 @@ module tb_sddma;
         check(!dma_active && !dma_frz, "T5 OUT #47,01 (sin DMA) no arranca la DMA");
         wait_card_idle(4000000);
         check(!rbusy, "T5 la lectura normal termina");
+
+        // ---- T6: modo LOGICO: 2 bloques en BE00h (pag.2 -> seg mreg2, luego pag.3 -> seg mreg3) ----
+        mreg2 = 8'd6; mreg3 = 8'd5;
+        set_dest_log(16'hBE00);
+        set_lba(32'd10);
+        io_out(8'h4D, 8'd2);
+        io_out(8'h47, 8'h05);
+        wait_frz(1, 4000, ok);
+        wait_frz(0, 8000000, ok);
+        check(ok, "T6 logico: la CPU se suelta");
+        check(cmp_block(6*16384 + 16'h3E00, 10) == 0, "T6 logico: 1er bloque en seg 6 (mreg2) + 3E00h");
+        check(cmp_block(5*16384, 11) == 0, "T6 logico: 2o bloque cruza a la pag.3 -> seg 5 (mreg3) + 0");
+        check(ram[6*16384 + 16'h3DFF] == 8'hEE && ram[5*16384 + 16'h0200] == 8'hEE, "T6 logico: nada fuera");
+        // patron 32 lo hi plantado en la tarjeta para T7: 32 00 50 (SCC), 32 00 60 (kon+a8+a16), 32 FF 77 (a16)
+        card.mem[0*512 + 100] = 8'h32; card.mem[0*512 + 101] = 8'h00; card.mem[0*512 + 102] = 8'h50;
+        card.mem[1*512 + 200] = 8'h32; card.mem[1*512 + 201] = 8'h00; card.mem[1*512 + 202] = 8'h60;
+        card.mem[2*512 + 510] = 8'h32; card.mem[2*512 + 511] = 8'hFF; card.mem[3*512 + 0] = 8'h77;   // cruza el bloque
+        card.mem[3*512 + 10]  = 8'h32; card.mem[3*512 + 11]  = 8'h00; card.mem[3*512 + 12]  = 8'h68;
+        // ---- T7: contadores: 4 bloques con reset+count (1Dh), luego 1 con count (0Dh), luego 1 sin (05h) ----
+        set_dest(23'h040000);
+        set_lba(32'd0);
+        io_out(8'h4D, 8'd4);
+        io_out(8'h47, 8'h1D);
+        wait_frz(1, 4000, ok);
+        wait_frz(0, 16000000, ok);
+        expect_counts(0, 4);
+        check(ok && cnt_scc == e_scc && cnt_kon == e_kon && cnt_a8 == e_a8 && cnt_a16 == e_a16, "T7 contadores tras 4 bloques = cuenta por software");
+        $display("       T7: scc=%0d kon=%0d a8=%0d a16=%0d (esperado %0d %0d %0d %0d)", cnt_scc, cnt_kon, cnt_a8, cnt_a16, e_scc, e_kon, e_a8, e_a16);
+        check(cnt_scc >= 1 && cnt_kon >= 1 && cnt_a8 >= 2 && cnt_a16 >= 2, "T7 los patrones plantados se ven (incluido el que cruza de bloque)");
+        set_lba(32'd4);
+        io_out(8'h4D, 8'd1);
+        io_out(8'h47, 8'h0D);
+        wait_frz(1, 4000, ok);
+        wait_frz(0, 8000000, ok);
+        expect_counts(0, 5);
+        check(ok && cnt_scc == e_scc && cnt_kon == e_kon && cnt_a8 == e_a8 && cnt_a16 == e_a16, "T7 sin reset: acumula el 5o bloque");
+        set_lba(32'd5);
+        io_out(8'h4D, 8'd1);
+        io_out(8'h47, 8'h05);
+        wait_frz(1, 4000, ok);
+        wait_frz(0, 8000000, ok);
+        check(ok && cnt_scc == e_scc && cnt_kon == e_kon && cnt_a8 == e_a8 && cnt_a16 == e_a16, "T7 sin bit3: los contadores no cambian");
 
         if (errors == 0) $display("=== tb_sddma: TODO OK ===");
         else             $display("=== tb_sddma: %0d FALLOS ===", errors);

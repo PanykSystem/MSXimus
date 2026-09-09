@@ -20,7 +20,9 @@
 //   #4F   W : puntero a 0.   R: puntero[7:0] (depuracion).
 //           V3.6: OUT #4F,80h arma el registro de DESTINO de la DMA y los TRES
 //           OUT #4F siguientes son la direccion fisica de 23 bits (bajo, medio,
-//           alto). Cualquier otro OUT #4F sigue rebobinando el puntero (el
+//           alto; bit7 del alto = 1 -> MODO LOGICO, V3.6c: los 16 bits bajos son
+//           una direccion Z80 que el core traduce con el mapper). Cualquier
+//           otro OUT #4F sigue rebobinando el puntero (el
 //           driver de Nextor manda 00h). #47 con el bit2: leer + DMA (05h).
 //
 //   buf_ack: pulso de un ciclo cuando se ha leido o escrito el byte 511 por #4C.
@@ -60,8 +62,9 @@ module sdc_ioport (
     output reg  [8:0] ptr,
     output reg        buf_ack,
     output reg  [7:0] count,
-    output reg  [4:0] info_idx,
-    output reg [22:0] dma_addr      // V3.6: destino fisico de la DMA de lectura
+    output reg  [5:0] info_idx,     // V3.6c: 6 bits (32-39 = contadores de patrones)
+    output reg [22:0] dma_addr,     // V3.6: destino de la DMA de lectura (fisico o logico)
+    output reg        dma_log       // V3.6c: 1 = dma_addr[15:0] es una direccion Z80 (modo logico)
 );
 
     // ⚠️ ETAPA DE REGISTRO A LA ENTRADA (V3.5d, tras cuatro campanas perdidas).
@@ -117,7 +120,7 @@ module sdc_ioport (
             w48_d     <= 4'd0;
             buf_ack   <= 1'b0;
             count     <= 8'd1;
-            info_idx  <= 5'd0;
+            info_idx  <= 6'd0;
             cmd_wr    <= 1'b0;
             cmd_val   <= 8'd0;
             saddr_wr  <= 4'd0;
@@ -128,6 +131,7 @@ module sdc_ioport (
             w4f_d     <= 1'b0;
             dma_idx   <= 2'd3;
             dma_addr  <= 23'd0;
+            dma_log   <= 1'b0;
         end else begin
             // --- orden (#47): pulso de un ciclo al empezar el OUT, con su dato ---
             w47_d  <= w47;
@@ -156,14 +160,16 @@ module sdc_ioport (
             // V3.6: destino de la DMA por #4F (pulso de un ciclo, como la orden)
             w4f_d <= w4f;
             if (w4f && !w4f_d) begin
-                if (din_r == 8'h80)       dma_idx <= 2'd0;
+                // V3.6c: 80h solo ARMA estando desarmado; armado, 80h es un byte mas
+                // (el alto con bit7 = modo logico y segmento 0)
+                if (dma_idx == 2'd3) begin if (din_r == 8'h80) dma_idx <= 2'd0; end
                 else if (dma_idx == 2'd0) begin dma_addr[7:0]   <= din_r;      dma_idx <= 2'd1; end
                 else if (dma_idx == 2'd1) begin dma_addr[15:8]  <= din_r;      dma_idx <= 2'd2; end
-                else if (dma_idx == 2'd2) begin dma_addr[22:16] <= din_r[6:0]; dma_idx <= 2'd3; end
+                else if (dma_idx == 2'd2) begin dma_addr[22:16] <= din_r[6:0]; dma_log <= din_r[7]; dma_idx <= 2'd3; end
             end
             if (w4d)        count <= din_r;
             if (force1)     count <= 8'd1;
-            if (w4e)        info_idx <= din_r[4:0];
+            if (w4e)        info_idx <= din_r[5:0];
         end
     end
 
