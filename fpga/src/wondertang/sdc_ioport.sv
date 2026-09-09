@@ -18,6 +18,10 @@
 //   #4E   W : indice (0..31) del byte de informacion que devolvera la lectura de
 //             #4E (2 = estado, 12 = tipo, 13 = MID, 25-27 = cronometro, 28 = firma).
 //   #4F   W : puntero a 0.   R: puntero[7:0] (depuracion).
+//           V3.6: OUT #4F,80h arma el registro de DESTINO de la DMA y los TRES
+//           OUT #4F siguientes son la direccion fisica de 23 bits (bajo, medio,
+//           alto). Cualquier otro OUT #4F sigue rebobinando el puntero (el
+//           driver de Nextor manda 00h). #47 con el bit2: leer + DMA (05h).
 //
 //   buf_ack: pulso de un ciclo cuando se ha leido o escrito el byte 511 por #4C.
 //   En multibloque es el "bufer vaciado / bufer lleno" que sd_reader espera.
@@ -56,7 +60,8 @@ module sdc_ioport (
     output reg  [8:0] ptr,
     output reg        buf_ack,
     output reg  [7:0] count,
-    output reg  [4:0] info_idx
+    output reg  [4:0] info_idx,
+    output reg [22:0] dma_addr      // V3.6: destino fisico de la DMA de lectura
 );
 
     // ⚠️ ETAPA DE REGISTRO A LA ENTRADA (V3.5d, tras cuatro campanas perdidas).
@@ -101,6 +106,8 @@ module sdc_ioport (
     reg       a4c_d = 1'b0;
     reg       w47_d = 1'b0;
     reg [3:0] w48_d = 4'd0;
+    reg       w4f_d = 1'b0;
+    reg [1:0] dma_idx = 2'd3;    // 3 = desarmado; 0..2 = byte que toca
 
     always @(posedge clk or negedge rstn) begin
         if (~rstn) begin
@@ -118,6 +125,9 @@ module sdc_ioport (
             data_sel  <= 1'b0;
             data_wr   <= 1'b0;
             data_val  <= 8'd0;
+            w4f_d     <= 1'b0;
+            dma_idx   <= 2'd3;
+            dma_addr  <= 23'd0;
         end else begin
             // --- orden (#47): pulso de un ciclo al empezar el OUT, con su dato ---
             w47_d  <= w47;
@@ -143,6 +153,14 @@ module sdc_ioport (
                 if (ptr == 9'd511) buf_ack <= 1'b1;
             end
             if (w47 || w4f) ptr <= 9'd0;        // la orden (o #4F) rebobina el bufer
+            // V3.6: destino de la DMA por #4F (pulso de un ciclo, como la orden)
+            w4f_d <= w4f;
+            if (w4f && !w4f_d) begin
+                if (din_r == 8'h80)       dma_idx <= 2'd0;
+                else if (dma_idx == 2'd0) begin dma_addr[7:0]   <= din_r;      dma_idx <= 2'd1; end
+                else if (dma_idx == 2'd1) begin dma_addr[15:8]  <= din_r;      dma_idx <= 2'd2; end
+                else if (dma_idx == 2'd2) begin dma_addr[22:16] <= din_r[6:0]; dma_idx <= 2'd3; end
+            end
             if (w4d)        count <= din_r;
             if (force1)     count <= 8'd1;
             if (w4e)        info_idx <= din_r[4:0];

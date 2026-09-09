@@ -1553,6 +1553,16 @@ assign keyboard_addr = ppi_port_c[3:0];
     reg [1:0] v68_wait_s = 2'b11;
     always @(posedge clk_54m) v68_wait_s <= {v68_wait_s[0], v68_wait86_n};
     wire vdp_wait54_n = v68_wait_s[1];
+    // V3.6: DMA de la SD (sd_dma.sv). frz = CPU congelada con el bus en reposo:
+    // el puerto de RAM de la CPU pasa a la DMA por el camino del streamer de la
+    // flash (stream_*, mas abajo). Se declaran aqui porque el T80 y el mux de
+    // ram_addr los usan antes de la instancia (Gowin crea implicitos de 1 bit).
+    wire        dma_frz;
+    wire        dma_active;
+    wire        dma_rfsh_ok;
+    wire        dma_ram_req;
+    wire [22:0] dma_ram_addr;
+    wire [7:0]  dma_ram_din;
     // (reg turbo_eff adelantado junto al FSM de waits, P1-iter.2)
     always @ (posedge clk_54m) begin
         if (!(bus_reset_n & reset3_n & flash_idle & esp_boot_ok))
@@ -1590,20 +1600,20 @@ assign keyboard_addr = ppi_port_c[3:0];
       `ifdef ENABLE_M1_WAIT
         // v1.9: M1 wait is NOT bypassed in turbo (real WSX keeps it at 5.37 MHz);
         // the speed change comes only from the 3.6/5.37 cadence mux.
-        .clk_enable (clk_enable_cpu_54 & wait_io & wait_m1),
-        .clk_falling (clk_falling_cpu_54 & wait_io & wait_m1),
+        .clk_enable (clk_enable_cpu_54 & wait_io & wait_m1 & ~dma_frz),
+        .clk_falling (clk_falling_cpu_54 & wait_io & wait_m1 & ~dma_frz),
       `else
-        .clk_enable (clk_enable_3m6_54 & wait_io ),
-        .clk_falling (clk_falling_3m6_54 & wait_io ),
+        .clk_enable (clk_enable_3m6_54 & wait_io & ~dma_frz),
+        .clk_falling (clk_falling_3m6_54 & wait_io & ~dma_frz),
       `endif
     `else
       `ifdef ENABLE_M1_WAIT
         // (inactive branch) v1.9 semantics: cadence mux + M1 wait always on
-        .clk_enable (clk_enable_cpu_54 & wait_m1),
-        .clk_falling (clk_falling_cpu_54 & wait_m1),
+        .clk_enable (clk_enable_cpu_54 & wait_m1 & ~dma_frz),
+        .clk_falling (clk_falling_cpu_54 & wait_m1 & ~dma_frz),
       `else
-        .clk_enable (clk_enable_3m6_54),
-        .clk_falling (clk_falling_3m6_54),
+        .clk_enable (clk_enable_3m6_54 & ~dma_frz),
+        .clk_falling (clk_falling_3m6_54 & ~dma_frz),
       `endif
     `endif
     `ifdef ENABLE_WIFI
@@ -2605,7 +2615,14 @@ assign keyboard_addr = ppi_port_c[3:0];
     // mitad baja sigue en el banco C: todo lo de <=2 MB cae en las mismas
     // direcciones fisicas que antes. Sin sumador: A21 elige {~A21, A21}.
 
-    assign ram_addr = (~flash_idle) ? rom_addr :
+    // V3.6: el camino "stream" (CPU parada) lo comparten el streamer de la flash
+    // del arranque y la DMA de la SD. El mux de arriba sigue siendo de dos ramas:
+    // la eleccion flash/DMA va por debajo, sobre registros, fuera del cono de la CPU.
+    wire        stream_active = ~flash_idle | dma_frz;
+    wire [22:0] stream_addr   = (~flash_idle) ? rom_addr[22:0] : dma_ram_addr;
+    wire [7:0]  stream_dout   = (~flash_idle) ? rom_dout : dma_ram_din;
+    wire        stream_write  = (~flash_idle) ? rom_write : dma_ram_req;
+    assign ram_addr = (stream_active) ? stream_addr :
                 `ifdef ENABLE_MAPPER
                         (mapper_req == 1) ? { 2'b00, mapper_addr[20:0] } :  //bank A (2 MB)
                 `endif
@@ -2662,9 +2679,9 @@ assign keyboard_addr = ppi_port_c[3:0];
                 `endif
                       megaram_wrt | gm2_mem_wrt;
 
-    assign ram_read  = (~flash_idle) ? 1'b0      : (any_ram_rd_req & ~bus_rd_n);
+    assign ram_read  = (stream_active) ? 1'b0      : (any_ram_rd_req & ~bus_rd_n);
 
-    assign ram_write = (~flash_idle) ? rom_write : (any_ram_wr & ~bus_wr_n);
+    assign ram_write = (stream_active) ? stream_write : (any_ram_wr & ~bus_wr_n);
 
     // _125c: se EVALUO registrar any_ram_req (el cono T80 ISet/IStatus ->
     // mux A -> mapper -> aceptacion, ~13 niveles, familia final de timing de
@@ -2673,9 +2690,9 @@ assign keyboard_addr = ppi_port_c[3:0];
     // retrasado del req hace perder una ventana entre lecturas back-to-back)
     // y T9b pierde 13% de lecturas en 1T @5.369. El turbo manda: la familia
     // se contiene con syn_maxfan (ISet/IStatus en t80.vhd) + sembrado.
-    assign ram_req   = (~flash_idle) ? rom_write : any_ram_req;
+    assign ram_req   = (stream_active) ? stream_write : any_ram_req;
 
-    assign ram_din = (~flash_idle) ? { rom_dout, rom_dout }  : { cpu_dout, cpu_dout };
+    assign ram_din = (stream_active) ? { stream_dout, stream_dout }  : { cpu_dout, cpu_dout };
 
 // SDCLK_INVERT=1 CONFIRMADO EN HW (2026-07-08): con fase normal el auto-test
 // da ROJO (errores CPU) y con 180 grados VERDE; el core arranca (serial _18inv).
@@ -2741,7 +2758,9 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     .bus_rfsh_n(bus_rfsh_n),
     // _181: mismo termino que el RESET_n del T80 — el refresco autonomo solo
     // puede disparar cuando el Z80 esta provadamente parado (ver memory.v)
-    .cpu_run(bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz),
+    // V3.6: con la DMA, el refresco autonomo SOLO en sus ventanas de espera (dma_rfsh_ok),
+    // nunca durante la rafaga de escrituras (memory.v _175/_181: pisaria una aceptacion)
+    .cpu_run(bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok),
 
     .ram_dout(ram_dout),
     .vram_dout(VrmDbi2),
@@ -5056,6 +5075,10 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     wire       sdio_ack;
     wire [7:0] sdio_count;
     wire [4:0] sdio_idx;
+    wire [22:0] sdio_dma_addr;    // V3.6: destino fisico de la DMA (OUT #4F,80h + 3 bytes)
+    wire        dma_buf_rd, dma_ack;
+    wire [8:0]  dma_buf_addr;
+    wire [7:0]  dma_blocks;
     // V3.5d: la seleccion del dispositivo va REGISTRADA. Combinacional colgaba
     // MAS CARGA del IORQ_n del Z80, que es de donde salen los peores caminos del
     // chip desde siempre (los CE de config2/config6/snd_gain, clk_54m->clk_27m):
@@ -5086,7 +5109,8 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .ptr(sdio_ptr),
         .buf_ack(sdio_ack),
         .count(sdio_count),
-        .info_idx(sdio_idx)
+        .info_idx(sdio_idx),
+        .dma_addr(sdio_dma_addr)
     );
     // estado por puerto: bit7 busy · bit4 bloque listo/bufer libre (multibloque) ·
     // bit3 SIEMPRE 1 (sonda: un core sin puertos devuelve FFh en #47, con los bits 6:5 a 1)
@@ -5107,7 +5131,8 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
                               (sdio_idx == 5'd25) ? ms_snap[7:0] :
                               (sdio_idx == 5'd26) ? ms_snap[15:8] :
                               (sdio_idx == 5'd27) ? ms_snap[23:16] :
-                              (sdio_idx == 5'd28) ? 8'h54 : 8'hFF;   // firma 'T' = hay cronometro
+                              (sdio_idx == 5'd28) ? 8'h54 :          // firma 'T' = hay cronometro
+                              (sdio_idx == 5'd29) ? 8'h44 : 8'hFF;   // V3.6: firma 'D' = hay DMA de lectura
     // ---- V3.5d: CRONOMETRO LIBRE DE MILISEGUNDOS ----------------------------
     // POR QUE: el menu media la carga con el JIFFY de la BIOS (#FC9E), que solo
     // avanza con las interrupciones ACTIVAS; la carga corre con DI, asi que el
@@ -5181,8 +5206,11 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     
         .clock_b(clk_27m),
         .wren_b(ff_sd_rstart && sd_outen_w),
-        .rden_b(ff_sd_wstart && sd_outen_w),
-        .address_b(sd_outaddr_w),
+        // V3.6: la DMA lee el bufer por ESTE puerto (el de la tarjeta, ocioso en
+        // RHOLD/IDLING): el mux del puerto A, que es el del camino critico de la
+        // v3.5c (cpu1/IORQ_n -> dpram1 ADA), no se toca. Solo mientras dma_buf_rd.
+        .rden_b((ff_sd_wstart && sd_outen_w) || dma_buf_rd),
+        .address_b(dma_buf_rd ? dma_buf_addr : sd_outaddr_w),
         .data_b(sd_outbyte_w),
         .q_b(sd_inbyte_w)
     );
@@ -5236,8 +5264,37 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .init(ff_sd_init),
         // V3.5c: multibloque (CMD18/CMD25) gobernado desde los puertos de E/S
         .rcount(sdio_count),
-        .buf_ack(sdio_ack),
+        .buf_ack(sdio_ack | dma_ack),      // V3.6: la DMA tambien vacia el bufer
         .blk_rdy(sd_blk_rdy_w)
+    );
+
+    // ---- V3.6: DMA de LECTURA SD -> RAM (sd_dma.sv) ----------------------------
+    // Orden: OUT #4F,80h + 3 bytes de destino fisico (bajo, medio, alto), OUT #4D,n
+    // y OUT #47,05h (leer + DMA). La CPU se congela con el bus en reposo, el core
+    // copia cada bloque del bufer a la RAM (~150 us por bloque) y da el buf_ack;
+    // al acabar la orden (busy=0) suelta la CPU, que sigue en la instruccion
+    // siguiente al OUT. Errores como siempre: bits 1-2 del estado.
+    sd_dma u_sddma (
+        .clk(clk_54m),
+        .rstn(bus_reset_n),
+        .start(sdio_cmd_wr && sdio_cmd_val[2] && sdio_cmd_val[0]),
+        .dest(sdio_dma_addr),
+        .bus_idle(wait_io & wait_m1 & bus_rd_n & bus_wr_n & bus_mreq_n & ex_bus_iorq_n & (ram_busy == 0)),
+        .blk_rdy(sd_blk_rdy_w),
+        .rbusy(sd_busy_w),
+        .sd_err(sd_rcrc_error_w | sd_timeout_error_w),
+        .buf_q(sd_inbyte_w),
+        .ram_busy(ram_busy),
+        .active(dma_active),
+        .frz(dma_frz),
+        .buf_addr(dma_buf_addr),
+        .buf_rd(dma_buf_rd),
+        .ack(dma_ack),
+        .ram_req(dma_ram_req),
+        .ram_addr(dma_ram_addr),
+        .ram_din(dma_ram_din),
+        .blocks(dma_blocks),
+        .rfsh_ok(dma_rfsh_ok)
     );
     
     assign sd_dat1 = 1;
