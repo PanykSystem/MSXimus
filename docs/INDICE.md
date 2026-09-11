@@ -18,16 +18,16 @@ Idioma: castellano. El manual de usuario se traducirá al inglés cuando esté c
 
 | Nº | Capítulo | Estado | De dónde sale |
 |---|---|---|---|
-| 01 | Qué es el MSXimus: la máquina, qué hardware hace falta, qué trae el core | pendiente | README, docs/BOARD_60K.md |
-| 02 | Instalación: flashear el core (.fs y _jtag.bin), el pack de BIOS, el BL616, el ESP32-C6 | pendiente | README (secciones Installation, How to flash, About the BIOS pack, Flashing the BL616, Wiring the C6) |
-| 03 | La tarjeta SD: formato y particiones, la carpeta FHUNT, dónde van las ROMs y los discos, etiquetas en el nombre, el fichero oculto NEXTOR.EMU | pendiente | menu_main.asm, srm_saves.asm, LEEME de v3.5 |
+| 01 | [Qué es el MSXimus](manual/01-que-es.md): la máquina, lo que trae, lo que hace falta, lo que no es | **escrito** | README |
+| 02 | [Instalación](manual/02-instalacion.md): la flash de la placa, el pack, el BL616, el ESP32-C6 con su cableado, actualizar | **escrito** | README, top.v |
+| 03 | [La tarjeta SD](manual/03-tarjeta-sd.md): qué tarjeta, formato, qué poner y dónde, ficheros especiales, etiquetas, discos, editar desde el PC | **escrito** | menu_main.asm, srm_saves.asm, gm2.asm |
 | 04 | [El menú de arranque](manual/04-menu.md): flujo de arranque, teclas del logo, navegador, lanzar ROM, lanzar disco, Ajustes, WiFi, File-Hunter, Pruebas, mensajes | **escrito** | menu_main.asm, gm2.asm, srm_saves.asm, test_menu.asm |
-| 05 | ROMs y mappers: los mappers soportados (Plain, Konami, Konami-SCC, ASCII8, ASCII16, NEO-8, NEO-16), la megaram de 4 MB, la SRAM de cartucho y su guardado en la SD, el Game Master 2 en el slot 1 | pendiente | menu_main.asm, srm_saves.asm, gm2.asm, LEEME v3.5c/v3.5f |
-| 06 | MSX-DOS y Nextor: los dos packs (Nextor 2.1.4 y Nextor 3 beta), lanzar un .dsk, la lectura por DMA, qué esperar de cada uno | pendiente | LEEME v3.6/v3.6c, memoria de Nextor 3 |
-| 07 | WiFi y File-Hunter: el ESP32-C6, la tecla W, buscar y descargar con la tecla F, límites | pendiente | menu_main.asm, README (Wiring the C6), repo ESP32-for-FPGA |
-| 08 | Audio: PSG, SCC, OPLL, OPL4, Y8950 y ADPCM, estéreo, el segundo SCC del slot 1 | pendiente | README, docs/informes_v2/INFORME_GANANCIA_AUDIO.md, memoria OPL4 |
-| 09 | Vídeo: el V9968, modos HDMI, scanlines, el panel F12 del BL616 | pendiente | README (The V9968, The status panel), docs/tecnica/05 |
-| 10 | Problemas frecuentes y cómo diagnosticarlos: la tecla T, el panel F12, qué mirar cuando la SD no aparece, cuando una ROM no arranca, cuando no hay red | pendiente | LEEMEs, test_menu.asm |
+| 05 | [ROMs y mappers](manual/05-roms-mappers.md): la megaram, los siete mappers, cómo se decide, la SRAM y su guardado, el Game Master 2, ROMs que no lanzan | **escrito** | menu_main.asm, srm_saves.asm, gm2.asm, megaram.v |
+| 06 | [MSX-DOS y Nextor](manual/06-msxdos-nextor.md): las dos versiones, arrancar en DOS, discos de imagen, rendimiento, otros sistemas | **escrito** | sd_rw_ports.inc, LEEMEs |
+| 07 | [WiFi y File-Hunter](manual/07-wifi-file-hunter.md): qué pone el módulo, la tecla W, la tecla F paso a paso, mensajes, diagnóstico | **escrito** | menu_main.asm, ESP32-for-FPGA |
+| 08 | [Audio](manual/08-audio.md): los chips, mono y estéreo, el volumen, lo comprobado, lo que no hay | **escrito** | top.v (mezclador) |
+| 09 | [Vídeo](manual/09-video.md): la salida 720p, scanlines, 50 Hz, el panel F12, el V9968 para el usuario | **escrito** | msx2hdmi_v9968.sv, README |
+| 10 | [Problemas frecuentes](manual/10-problemas.md): por síntoma, con causa probable y qué hacer; herramientas de diagnóstico; cómo reportar | **escrito** | LEEMEs, test_menu.asm |
 
 ## Referencia técnica (`docs/tecnica/`)
 
@@ -36,21 +36,22 @@ Idioma: castellano. El manual de usuario se traducirá al inglés cuando esté c
 | 01 | [Arquitectura](tecnica/01-arquitectura.md): la placa, diagrama de bloques, relojes y dominios, el bus y los slots, la memoria, el vídeo, el audio, los periféricos, la secuencia de arranque | **escrito** | top.v y sus módulos |
 | 02 | [Mapa de puertos de E/S](tecnica/02-puertos-es.md): la E/S conmutada 40h-4Fh con los tres dispositivos, los puertos de la SD, y el resto puerto a puerto | **escrito** | top.v, sdc_ioport.sv, swioports.vhd |
 | 03 | [Mapas de memoria](tecnica/03-mapas-memoria.md): slots y páginas, la SDRAM física banco a banco, la megaram y sus segmentos reservados, la flash, la DDR3 | **escrito** | top.v, megaram.v, gm2_slot1.v, desmontar_pack.py |
-| 04 | El pack de BIOS: las ROMs que lleva, cómo se monta (hacer_packs.py), el menú de 32 KB en la página 1, una BIOS por máquina | pendiente | repo bios-msxnano-msximus, memoria "anatomía del pack" |
+| 04 | [El pack de BIOS](tecnica/04-pack-bios.md): qué es, las diez ROMs y su procedencia, el menú de 32 KB en ROM, construir, un pack para todos los cores | **escrito** | bios-msxnano-msximus |
 | 05 | [El V9968 en el MSXimus](tecnica/05-v9968.md): qué es, de dónde sale, las tres generaciones del interfaz de registros y en cuál estamos, el puerto 4, cómo está integrado, cómo se comprueba | **escrito** | fpga/v9968/ORIGEN.txt, hra1129/V9968_Cartridge |
 | 06 | [La tarjeta SD y la DMA](tecnica/06-sd-dma.md): el controlador, los cuatro caminos con sus velocidades, cómo funciona la DMA, los dos modos de destino, los contadores de mapper, quién usa qué, las firmas | **escrito** | sd_reader.sv, sdc_ioport.sv, sd_dma.sv, sd_rw_ports.inc |
 | 07 | [Síntesis y campañas](tecnica/07-sintesis-campanas.md): herramientas, las dos líneas de build, cómo se lanza una campaña, el gate y la regla de los 0,4 ns, lo aprendido del chip, cómo se entrega | **escrito** | lanzar_campana.ps1, gate_check.ps1 |
 | 08 | [Simulación](tecnica/08-simulacion.md): el entorno WSL, los bancos por subsistema, las ROMs de prueba, verificar contra openMSX, qué no tiene banco | **escrito** | tools/ |
-| 09 | Changelog por versión, de la v3.1 a la v3.6, con el dado y los hashes de cada entrega | pendiente | los LEEME de files/, mi_release/ |
+| 09 | [Changelog de la era v3](tecnica/09-changelog.md): de la v3.1 a la v3.6d, con el dado, el margen y los hashes de cada entrega | **escrito** | los LEEME de files/, mi_release/ |
 
 ## Histórico (`docs/historico/`)
 
-Pendiente de mover: `AUDIT_PRE_PORT_60K.md`, `BOARD_60K.md`, `CLOCK_CONSTANTS.md`, `CLOCK_PLAN.md`, `DDR3_WRAPPER.md`, `EXPEDIENTE_CAZA_V9968_v212_y_V3.md`, `FILE_MANIFEST.md`, `GW5A_IP.md`, `MEMORY_CONTRACT.md`, `MEMORY_OPTIONS.md`, `MIGRATION_STATUS.md`, `PORT_FINDINGS.md`, `PORT_PLAN.md`, `ROADMAP.md`, `SDR_MEMORY_PORT.md`, `VRAM_BRAM_DESIGN.md`, `email_ducasp_bl616.md` y la carpeta `informes_v2/`. Se mueven cuando los capítulos técnicos que los sustituyen estén escritos, no antes.
+Movidos el 11 de septiembre de 2026, con un [índice propio](historico/README.md): los diecisiete documentos del porte de julio y la carpeta `informes_v2/` con los quince informes de la v2.
 
 Se quedan donde están: `hw/` (esquema de la placa), `img/` y `logo/`.
 
 ## Pendiente transversal
 
 - Capturas de pantalla del menú para el capítulo 04. Se pueden sacar del emulador con el pack del MSXimus.
-- Créditos completos en el README al publicar la v3.6.
+- Créditos completos en el README al publicar la v3.6, y enlazar este índice desde el README.
 - Traducción al inglés del manual cuando esté cerrado.
+- Revisión de Albert de todos los capítulos: están escritos desde el código, no desde el uso.

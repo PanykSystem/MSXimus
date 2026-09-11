@@ -89,7 +89,7 @@ El mecanismo de guardado depende de que la SDRAM sobreviva al reset del MSX, que
 | 500000-6FFFFF | 2 MB | ROM de ondas YRW801 del OPL4 |
 | 700000-7FFFFF | 1 MB | Libre |
 
-El pack se flashea en 400000 y el core lo copia a la SDRAM en cada encendido. Los seis bytes de configuración son la cola del pack: el mismo streaming que copia los 512 KB lee los seis siguientes y los carga en los registros 41h, 42h, 45h y 44h. Por eso un pack nuevo trae su configuración por defecto, y por eso el menú, al hacer Save & Restart, reescribe solo esos seis bytes.
+El pack se flashea en 400000 y el core lo copia a la SDRAM en cada encendido. El mismo streaming que copia los 512 KB lee los seis bytes siguientes y los carga en los registros 41h, 42h, 45h y 44h. El menú, al hacer Save & Restart, reescribe solo esos seis bytes. Desde el 9 de septiembre de 2026 el pack del MSXimus mide 512 KB justos, sin esa cola: así grabar un pack nuevo no pisa los ajustes guardados (se perdió dos veces en un día el "Slot 1 = Game Master 2" por eso). El pack del MSXnano sí la lleva.
 
 Si la cola no empieza por 'AB' el core no la carga y se queda con los valores de fábrica: config 1 = F3h (mapper en 3-0 y megaram en 3-3 activos, segundo SCC y scanlines apagados), config 2 = 0Fh (SD activa en el slot 3-2 y menú al arrancar), sin turbo y ganancia 5. Con el botón S2 pulsado en el encendido pasa lo mismo aunque la cola sea válida: es el rescate.
 
