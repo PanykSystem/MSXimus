@@ -6,25 +6,25 @@ Una carcasa para imprimir en 3D con la forma de un Spectravideo SVI-728, con la 
 
 ## Origen
 
-Deriva de la **[Spectravideo SVI-728 Retropie case](https://www.thingiverse.com/thing:4066021)** de Palver en Thingiverse, una réplica del SVI-728 pensada para una Raspberry Pi. Las piezas de este directorio son las que se han rediseñado o añadido para la Console 60K; la licencia del diseño original se aplica a lo que se conserva de él, y conviene mirarla en la página de Thingiverse antes de redistribuir.
+Deriva de la **[Spectravideo SVI-728 Retropie case](https://www.thingiverse.com/thing:4066021)** de Palver en Thingiverse, una réplica del SVI-728 pensada para una Raspberry Pi, rediseñada aquí para la Console 60K. **El 3MF lleva todo lo necesario**: no hace falta bajar nada del original. La licencia del diseño original se aplica a lo que se conserva de él; conviene mirarla en la página de Thingiverse antes de redistribuir.
 
 ## Qué hay
 
 | Fichero | Qué es |
 |---|---|
-| `MSXimus_carcasa.3mf` | El proyecto de **Bambu Studio** con las once piezas ya repartidas en cuatro platos y con los ajustes de impresión. Es lo que se abre y se imprime |
+| `MSXimus_carcasa.3mf` | El proyecto de **Bambu Studio** con las once piezas ya repartidas en cuatro platos y con los ajustes de impresión. Es lo que se abre y se imprime, y es la caja completa |
 | `stl/` | Las mismas once piezas sueltas, en STL, para cualquier otro laminador |
 
 Las piezas:
 
 | Pieza | Para qué | Plato del 3MF |
 |---|---|---|
-| `placa_inferior` | El suelo de la caja: los postes donde se atornilla la Console 60K, la rejilla del ventilador y las salidas de los cables | 3 |
-| `zona_pantalla` | La parte trasera de la tapa: la bahía del ESP32-C6 con su pantalla, la ventana del ventilador y la ranura de los conectores | 1 |
-| `tapacartucho` | La tapa de la bahía trasera | 1 |
-| `tapateclado` | La tapa que cubre la pantalla, con bisagra; se levanta para verla | 4 |
+| `placa_inferior` | **La tapa de abajo**: el suelo, con los postes donde se atornilla la Console 60K, la rejilla del ventilador y las salidas de los cables | 3 |
+| `zona_pantalla` | **La tapa de arriba, parte trasera**: la bahía del ESP32-C6 con su pantalla, la ventana del ventilador y la ranura de los conectores | 1 |
+| `tapateclado` | **La tapa de arriba, parte delantera**: el marco del teclado, donde se pegan las teclas | 4 |
+| `tapacartucho` | La tapa con bisagra de la bahía de la pantalla, donde el SVI-728 tenía el cartucho; se levanta para ver la pantalla | 1 |
 | `usb_conector_clamp_x1` | La brida que sujeta la extensión de dos USB-A al frontal | 2 |
-| `key_1` a `key_4` (gris oscuro), `key_5` (gris claro), `cursor` | Las teclas decorativas del teclado y el cursor en cruz | 2 |
+| `key_1` a `key_4` (gris oscuro), `key_5` (gris claro), `cursor` | Las teclas del teclado y el cursor en cruz. **Van pegadas** al marco de `tapateclado` | 2 |
 
 El teclado es decorativo: el MSXimus usa un teclado USB.
 
