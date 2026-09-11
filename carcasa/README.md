@@ -46,7 +46,10 @@ Cuatro platos. En cualquier otra impresora valen los STL con ajustes equivalente
 <p align="center"><img src="../docs/img/carcasa/carcasa_abierta_pantalla.jpg" alt="La carcasa abierta: la Console 60K atornillada al suelo, el C6 en su bahía, los cables" width="820"/></p>
 
 - La **Console 60K** va atornillada a los postes del suelo, con el disipador hacia arriba y el conector J10 hacia la bahía de la pantalla.
-- El **ESP32-C6** se sujeta en la bahía trasera con dos tornillos por su brida impresa y queda con la pantalla mirando hacia arriba, bajo la tapa. Sus cables al J10 son los del [capítulo 02 del manual](../docs/manual/02-instalacion.md): 5 V, GND, TX, RX y, opcional, el turbo.
+- El **ESP32-C6** se sujeta en la bahía trasera con dos tornillos por su brida impresa y queda con la pantalla mirando hacia arriba, bajo la tapa, y el USB-C accesible desde dentro para grabarlo. Sus cables al J10 son los del [capítulo 02 del manual](../docs/manual/02-instalacion.md): 5 V, GND, TX, RX y, opcional, el turbo. Una vez probados, un poco de silicona sobre el conector del J10 los deja fijos.
+
+<p align="center"><img src="../docs/img/carcasa/c6_bahia_cableado.jpg" alt="El C6 en su bahía, con los cables al J10 fijados con silicona" width="820"/></p>
+<p align="center"><img src="../docs/img/carcasa/c6_bahia_cableado_2.jpg" alt="La bahía del C6 con la tapa levantada" width="820"/></p>
 - El **ventilador** de 20 mm va en la ventana trasera de la tapa, con su cable al conector de ventilador de la placa (el rojo y negro de la foto).
 - **HDMI y USB**: latiguillos cortos de extensión llevan el HDMI y el USB de la placa a las ranuras traseras, y una extensión de dos USB-A con su brida sale al frontal izquierdo, para el teclado y el mando.
 

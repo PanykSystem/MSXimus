@@ -105,9 +105,9 @@ No hay ruta de arrastrar y soltar como en una Raspberry Pi Pico: el ESP32 no tie
 
 Con el módulo cableado y con firmware, la pantalla enseña el logo MSX al encender y luego el estado: red, turbo, reloj. La red se configura desde el MSX con la tecla **W** del menú ([capítulo 07](07-wifi-file-hunter.md)).
 
-Así queda montado dentro de la carcasa impresa, con el módulo en su bahía y los cables al J10:
+Así queda montado dentro de la carcasa impresa: el módulo en su bahía con el USB-C accesible, y los cables al J10 de la placa, fijados con silicona para que no se muevan:
 
-<p align="center"><img src="../img/carcasa/carcasa_abierta_pantalla.jpg" alt="El ESP32-C6 en su bahía, cableado al J10 de la Console 60K" width="820"/></p>
+<p align="center"><img src="../img/carcasa/c6_bahia_cableado.jpg" alt="El ESP32-C6 en su bahía, cableado al J10 de la Console 60K y fijado con silicona" width="820"/></p>
 
 ## 4. La carcasa (opcional)
 
