@@ -105,6 +105,16 @@ No hay ruta de arrastrar y soltar como en una Raspberry Pi Pico: el ESP32 no tie
 
 Con el módulo cableado y con firmware, la pantalla enseña el logo MSX al encender y luego el estado: red, turbo, reloj. La red se configura desde el MSX con la tecla **W** del menú ([capítulo 07](07-wifi-file-hunter.md)).
 
-## 4. Actualizar
+Así queda montado dentro de la carcasa impresa, con el módulo en su bahía y los cables al J10:
+
+<p align="center"><img src="../img/carcasa/carcasa_abierta_pantalla.jpg" alt="El ESP32-C6 en su bahía, cableado al J10 de la Console 60K" width="820"/></p>
+
+## 4. La carcasa (opcional)
+
+Hay una carcasa para imprimir en 3D con la forma de un Spectravideo SVI-728: la placa atornillada al suelo, el ESP32-C6 con su pantalla en una bahía con tapa, el ventilador en la trasera, HDMI y USB sacados atrás y dos USB-A al frontal. El proyecto de Bambu Studio, los STL, los ajustes de impresión y las notas de montaje están en [`carcasa/`](../../carcasa/README.md).
+
+<p align="center"><img src="../img/carcasa/carcasa_trasera.jpg" alt="La trasera de la carcasa: ventilador, HDMI y USB" width="820"/></p>
+
+## 5. Actualizar
 
 Un core nuevo se graba igual que la primera vez, solo el `.fs` en 0x000000, y apagar y encender. Un pack nuevo, solo el pack en 0x400000. Los ajustes guardados se conservan: el pack mide 512 KB justos y los seis bytes de configuración que van detrás, en 0x480000, no los toca el programador. En una placa recién grabada esos bytes están vacíos y el core arranca con los valores de fábrica, con el menú al arrancar activado; el primer Save & Restart los escribe. El `yrw801.rom` no cambia entre versiones.

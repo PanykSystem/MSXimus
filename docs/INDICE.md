@@ -47,7 +47,7 @@ Idioma: castellano. El manual de usuario se traducirá al inglés cuando esté c
 
 Movidos el 11 de septiembre de 2026, con un [índice propio](historico/README.md): los diecisiete documentos del porte de julio y la carpeta `informes_v2/` con los quince informes de la v2.
 
-Se quedan donde están: `hw/` (esquema de la placa), `img/` y `logo/`.
+Se quedan donde están: `hw/` (esquema de la placa), `img/` (con las fotos de la carcasa en `img/carcasa/`) y `logo/`. La carcasa imprimible vive en [`carcasa/`](../carcasa/README.md), en la raíz del repositorio, con su propio README.
 
 ## Pendiente transversal
 
