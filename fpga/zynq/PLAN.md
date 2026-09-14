@@ -312,6 +312,13 @@ Los 4 × USB del PL ya no hacen falta (el USB es el P3 del PS).
      (`tel.tcl` y la página del OSD). Validación: `tools/opl4test/opl4test.rom` (detección
      `SI 2031`, YRW801 == debug, RAM 2 MB, The Entertainer al piano) y después VGMPlay con
      packs MoonSound / MBWave.
+   - 🐛 14/09 noche, **bug del V9968 compartido** (pasa igual en la 60K): Xevious Fardraut
+     Saga muestra la banda del marcador en blanco con ruido; el resto del juego va bien.
+     La VRAM 0x6A00‑0x7FFF (líneas 212‑255) está a FF y es lo que se ve arriba. Detalle y
+     plan en `docs/tecnica/09-changelog.md` (v3.6e). Herramientas: `tools/vram.tcl`,
+     `tools/vramfill.tcl`. Aparte, y sea cual sea la causa, conviene **poner la VRAM a
+     cero al arrancar** (boot.tcl y BOOT.bin): la DDR arranca con basura y cualquier zona
+     que un juego no escriba se ve como ruido blanco.
    - 🔜 **Cinta TSX, pendiente TRAS el ESP32 y las descargas**: el `.tsx` vive en la SD
      (lo baja el File‑Hunter por el C6/S3 o se copia), el ARM lo convierte (port de
      `tsx2cvs`) y alimenta `cas_stream.v` (KCS, validado en el MSXnano) por una FIFO en
