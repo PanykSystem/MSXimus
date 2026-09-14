@@ -127,7 +127,14 @@ static void on_mouse(const hid_mouse_report_t *r)
 }
 
 /* ---------------- callbacks de TinyUSB ---------------- */
-void tuh_mount_cb(uint8_t daddr)   { usb_stats_mount++; log_str("USB: dispositivo "); log_dec(daddr); log_str(" montado\n"); }
+void tuh_mount_cb(uint8_t daddr)
+{
+    uint16_t vid = 0, pid = 0;
+    usb_stats_mount++;
+    tuh_vid_pid_get(daddr, &vid, &pid);
+    log_str("USB: dispositivo "); log_dec(daddr); log_str(" montado, VID:PID "); log_hex(((u32)vid << 16) | pid);
+    log_str(", interfaces HID "); log_dec(tuh_hid_itf_get_count(daddr)); log_str("\n");
+}
 void tuh_umount_cb(uint8_t daddr)  { log_str("USB: dispositivo "); log_dec(daddr); log_str(" quitado\n"); }
 
 void tuh_hid_mount_cb(uint8_t dev, uint8_t idx, const uint8_t *desc_report, uint16_t desc_len)

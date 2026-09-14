@@ -29,6 +29,19 @@ void log_dec(u32 v)
     while (n) log_char(t[--n]);
 }
 
+#include <stdarg.h>
+#include <stdio.h>
+int log_printf(const char *fmt, ...)
+{
+    char b[200];
+    va_list ap;
+    va_start(ap, fmt);
+    int n = vsnprintf(b, sizeof b, fmt, ap);
+    va_end(ap);
+    log_str(b);
+    return n;
+}
+
 void *memset(void *d, int c, unsigned int n) { unsigned char *p = d; while (n--) *p++ = (unsigned char)c; return d; }
 void *memcpy(void *d, const void *s, unsigned int n) { unsigned char *p = d; const unsigned char *q = s; while (n--) *p++ = *q++; return d; }
 int   memcmp(const void *a, const void *b, unsigned int n) { const unsigned char *p = a, *q = b; while (n--) { if (*p != *q) return *p - *q; p++; q++; } return 0; }

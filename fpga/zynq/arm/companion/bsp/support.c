@@ -43,6 +43,24 @@ void Xil_ICacheEnable(void) { }
 void Xil_ICacheDisable(void) { }
 
 void outbyte(char c) { log_char(c); }
+/* syscalls minimos de newlib (los arrastra vsnprintf): nada de ficheros ni salida */
+int  _close(int fd) { (void)fd; return -1; }
+int  _lseek(int fd, int off, int whence) { (void)fd; (void)off; (void)whence; return -1; }
+int  _read(int fd, char *b, int n) { (void)fd; (void)b; (void)n; return 0; }
+int  _write(int fd, const char *b, int n) { (void)fd; for (int i = 0; i < n; i++) log_char(b[i]); return n; }
+int  _fstat(int fd, void *st) { (void)fd; (void)st; return -1; }
+int  _isatty(int fd) { (void)fd; return 1; }
+int  _kill(int pid, int sig) { (void)pid; (void)sig; return -1; }
+int  _getpid(void) { return 1; }
+void _exit(int code) { (void)code; for (;;) ; }
+/* heap estatico para newlib (vsnprintf de log_printf) */
+static char heap_buf[16384];
+static unsigned heap_used;
+void *_sbrk(int incr)
+{
+    if (incr < 0 || heap_used + (unsigned)incr > sizeof heap_buf) return (void *)-1;
+    void *p = heap_buf + heap_used; heap_used += (unsigned)incr; return p;
+}
 char inbyte(void) { return 0; }
 
 /* L2 (PL310, 0xF8F02000): la demo de fabrica pudo dejarla activa. Sin MMU

@@ -487,6 +487,17 @@ if not NO_MB: rep("    assign keyboard = kbd_usb_s2;\n",
     assign keyboard = kbd_usb_s2 | kbd_mbox_s2;
 """, label="teclado buzon")
 
+# ---------------------------------------------------------------- 8e. OSD: congelar el Z80 DE VERDAD
+# En el Tang `iosys_frz` solo baja cpu_run y el controlador de SDRAM detiene al Z80. En la Zynq
+# cpu_run=0 significa para memory_axi "Z80 parado: invalida la cache entera" (carga de packs):
+# con un juego corriendo, el barrido bajo sus pies acababa en un salto a 0000 (14/09, Albert,
+# F12 sobre un juego SCC = "reinicio"). Aqui el OSD deja cpu_run en paz y congela el reloj del
+# Z80 como hace la DMA (clock enable), que es la pausa que se ve en el OSD.
+rep("    cpu_run_r <= bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok;\n",
+    "    cpu_run_r <= bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~dma_rfsh_ok;   // ZYNQ: el OSD no toca la cache de memory_axi\n",
+    label="osd cpu_run")
+rep("& ~dma_frz),\n", "& ~dma_frz & ~iosys_frz),\n", count=8, label="osd congela el reloj del Z80")
+
 # ---------------------------------------------------------------- 8d. MSX en reset hasta que el pack este en la DDR
 # MBOX+0x1C bit 0 (MSX_RUN) lo pone boot.tcl tras cargar el pack por JTAG, o el companion
 # tras arrancar (con BOOT.bin el FSBL deja el buzon a cero: el MSX espera). Sin buzon: siempre 1.

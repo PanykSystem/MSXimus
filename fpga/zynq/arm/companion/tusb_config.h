@@ -11,7 +11,8 @@
 #define TUP_DCD_ENDPOINT_MAX      12
 
 #define CFG_TUSB_OS               OPT_OS_NONE
-#define CFG_TUSB_DEBUG            0
+#define CFG_TUSB_DEBUG            0                 /* pon 2 para volcar enumeracion/errores al anillo (log_printf) */
+#define CFG_TUSB_DEBUG_PRINTF     log_printf
 #define CFG_TUSB_MEM_SECTION
 #define CFG_TUSB_MEM_ALIGN        __attribute__ ((aligned(32)))
 #define CFG_TUH_MEM_SECTION

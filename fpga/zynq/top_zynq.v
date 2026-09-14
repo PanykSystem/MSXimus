@@ -1647,20 +1647,20 @@ assign keyboard_addr = ppi_port_c[3:0];
       `ifdef ENABLE_M1_WAIT
         // v1.9: M1 wait is NOT bypassed in turbo (real WSX keeps it at 5.37 MHz);
         // the speed change comes only from the 3.6/5.37 cadence mux.
-        .clk_enable (clk_enable_cpu_54 & wait_io & wait_m1 & ~dma_frz),
-        .clk_falling (clk_falling_cpu_54 & wait_io & wait_m1 & ~dma_frz),
+        .clk_enable (clk_enable_cpu_54 & wait_io & wait_m1 & ~dma_frz & ~iosys_frz),
+        .clk_falling (clk_falling_cpu_54 & wait_io & wait_m1 & ~dma_frz & ~iosys_frz),
       `else
-        .clk_enable (clk_enable_3m6_54 & wait_io & ~dma_frz),
-        .clk_falling (clk_falling_3m6_54 & wait_io & ~dma_frz),
+        .clk_enable (clk_enable_3m6_54 & wait_io & ~dma_frz & ~iosys_frz),
+        .clk_falling (clk_falling_3m6_54 & wait_io & ~dma_frz & ~iosys_frz),
       `endif
     `else
       `ifdef ENABLE_M1_WAIT
         // (inactive branch) v1.9 semantics: cadence mux + M1 wait always on
-        .clk_enable (clk_enable_cpu_54 & wait_m1 & ~dma_frz),
-        .clk_falling (clk_falling_cpu_54 & wait_m1 & ~dma_frz),
+        .clk_enable (clk_enable_cpu_54 & wait_m1 & ~dma_frz & ~iosys_frz),
+        .clk_falling (clk_falling_cpu_54 & wait_m1 & ~dma_frz & ~iosys_frz),
       `else
-        .clk_enable (clk_enable_3m6_54 & ~dma_frz),
-        .clk_falling (clk_falling_3m6_54 & ~dma_frz),
+        .clk_enable (clk_enable_3m6_54 & ~dma_frz & ~iosys_frz),
+        .clk_falling (clk_falling_3m6_54 & ~dma_frz & ~iosys_frz),
       `endif
     `endif
     `ifdef ENABLE_WIFI
@@ -2833,7 +2833,7 @@ assign wv3_wdata = 8'd0;
 // bloque; y permitirlo un ciclo mas tarde solo lo hace mas conservador.
 reg cpu_run_r = 1'b0;
 always @(posedge clk_54m)
-    cpu_run_r <= bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok;
+    cpu_run_r <= bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~dma_rfsh_ok;   // ZYNQ: el OSD no toca la cache de memory_axi
 
 // ==== ZYNQ: la RAM del Z80 en la DDR del PS (zynq/memory_axi.v, HP1 @ clk_54m) ====
 // Mismo contrato ram_* que memory_ctrl. vram_*/wv*/rfsh no existen aqui (V9968 con

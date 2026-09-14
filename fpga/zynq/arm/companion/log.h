@@ -11,4 +11,5 @@ void log_char(char c);
 void log_str(const char *s);
 void log_hex(u32 v);
 void log_dec(u32 v);
+int  log_printf(const char *fmt, ...);      /* printf al anillo (TinyUSB con CFG_TUSB_DEBUG) */
 #endif
