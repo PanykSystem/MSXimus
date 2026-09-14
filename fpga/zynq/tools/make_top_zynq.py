@@ -3,8 +3,9 @@
 make_top_zynq.py — genera fpga/zynq/top_zynq.v a partir de fpga/top.v (Tang).
 
 Cirugia MINIMA y reproducible (anclas de texto, no numeros de linea):
-  1. defines: +ZYNQ +ENABLE_V9968_VDP +ENABLE_VRAM_AXI; -WAVE_DDR3/LOADER/OPL4_WAVE;
-     -ADPCM_SDRAM (queda el fallback BSRAM).
+  1. defines: +ZYNQ +ENABLE_V9968_VDP +ENABLE_VRAM_AXI; -WAVE_DDR3/LOADER (la memoria
+     de ondas del OPL4 es zynq/wave_axi.v en la DDR del PS por S_AXI_GP0; OPL4_WAVE
+     sigue ACTIVO y sus guardas se neutralizan); -ADPCM_SDRAM (queda el fallback BSRAM).
   2. cabecera del modulo: puertos de la ZYNQ MINI; los del Tang que desaparecen
      pasan a wires internos con tie-off (la logica de pegamento NO se toca).
   3. relojes: Gowin_PLL/pll_27/pll_74/pll_86/pll_12 -> MMCM/PLLE2 (PLAN.md A).
@@ -60,7 +61,146 @@ rep("`define ENABLE_V9958\n",
     "`define ENABLE_V9958\n", label="cabecera")
 rep("`define ENABLE_WAVE_DDR3 ", "//`define ENABLE_WAVE_DDR3 ", label="wave_ddr3")
 rep("`define ENABLE_WAVE_LOADER ", "//`define ENABLE_WAVE_LOADER ", label="wave_loader")
-rep("`define ENABLE_OPL4_WAVE ", "//`define ENABLE_OPL4_WAVE ", label="opl4_wave")
+# ENABLE_OPL4_WAVE se queda: el motor opl4_pcm es el mismo; su memoria (weng_*) la
+# sirve zynq/wave_axi.v (S_AXI_GP0 @ clk_wave375) en vez de wave_sdram. Las guardas
+# que exigen WAVE_DDR3+LOADER se neutralizan; wdbg_ready/wl_done pasan a constantes 1
+# (la YRW801 la carga boot.tcl / BOOT.bin en la DDR antes de soltar MSX_RUN).
+rep("""`ifdef ENABLE_OPL4_WAVE
+ `ifndef ENABLE_WAVE_DDR3
+    ERROR_ENABLE_OPL4_WAVE_requiere_ENABLE_WAVE_DDR3 u_guarda_def1();
+ `endif
+ `ifndef ENABLE_WAVE_LOADER
+    ERROR_ENABLE_OPL4_WAVE_requiere_ENABLE_WAVE_LOADER u_guarda_def2();
+ `endif
+""", """`ifdef ENABLE_OPL4_WAVE
+ // ZYNQ: la memoria de ondas es zynq/wave_axi.v (DDR del PS): sin WAVE_DDR3 ni LOADER
+""", label="guardas opl4_wave")
+rep("`ifdef ENABLE_WAVE_DDR3\n    // _103: BUS REGISTRADO",
+    '''    // ==== ZYNQ: memoria de ondas del OPL4 en la DDR del PS (zynq/wave_axi.v, S_AXI_GP0 @ clk_wave375) ====
+    // Sustituye a wave_sdram (Tang). Sin loader ni puerto 34-37h: la YRW801 (2 MB) la carga
+    // boot.tcl / BOOT.bin en WAVE_BASE antes de soltar MSX_RUN, y los 2 MB siguientes son la
+    // RAM de muestras; por eso wdbg_ready y wl_done son constantes 1 (opl4pcm_rst_n = bus_reset_n).
+    wire        wdbg_ready = 1'b1;
+    wire        wl_done    = 1'b1;
+    wire [7:0]  wave_diag;            // {err_resp, 3'b0, ops[3:0]} (el 34h del Tang, aqui solo interno)
+    reg  [1:0]  rst375_s = 2'b00;
+    always @(posedge clk_wave375) rst375_s <= {rst375_s[0], frst0_n};
+    wave_axi #(.BASE(32'h0F00_0000)) u_wave_axi (
+        .clk(clk_wave375), .aresetn(rst375_s[1]), .eng_rst_n(bus_reset_n),
+        .eng_req(weng_req), .eng_we(weng_we), .eng_addr(weng_addr), .eng_wdata(weng_wdata),
+        .eng_rdata(weng_rdata), .eng_rword(weng_rword), .eng_done_t(weng_done),
+        .diag(wave_diag), .tel(wave_tel),
+        .M_AWID(gp0_awid), .M_AWADDR(gp0_awaddr), .M_AWLEN(gp0_awlen), .M_AWSIZE(gp0_awsize),
+        .M_AWBURST(gp0_awburst), .M_AWLOCK(gp0_awlock), .M_AWCACHE(gp0_awcache), .M_AWPROT(gp0_awprot),
+        .M_AWQOS(gp0_awqos), .M_AWVALID(gp0_awvalid), .M_AWREADY(gp0_awready),
+        .M_WID(gp0_wid), .M_WDATA(gp0_wdata), .M_WSTRB(gp0_wstrb), .M_WLAST(gp0_wlast),
+        .M_WVALID(gp0_wvalid), .M_WREADY(gp0_wready),
+        .M_BID(gp0_bid), .M_BRESP(gp0_bresp), .M_BVALID(gp0_bvalid), .M_BREADY(gp0_bready),
+        .M_ARID(gp0_arid), .M_ARADDR(gp0_araddr), .M_ARLEN(gp0_arlen), .M_ARSIZE(gp0_arsize),
+        .M_ARBURST(gp0_arburst), .M_ARLOCK(gp0_arlock), .M_ARCACHE(gp0_arcache), .M_ARPROT(gp0_arprot),
+        .M_ARQOS(gp0_arqos), .M_ARVALID(gp0_arvalid), .M_ARREADY(gp0_arready),
+        .M_RID(gp0_rid), .M_RDATA(gp0_rdata), .M_RRESP(gp0_rresp), .M_RLAST(gp0_rlast),
+        .M_RVALID(gp0_rvalid), .M_RREADY(gp0_rready)
+    );
+    assign wdbg_diag_ddr3 = wave_diag;   // IN 34h: {err_resp, 3'b0, ops[3:0]} del puerto del motor
+
+    // ---- puerto de depuracion 34-37h del Tang (_103) sobre una 2a wave_axi en S_AXI_GP1 @ clk_54m ----
+    // opl4test lo usa (test 3: W/R de la memoria de ondas; test 4: lo que lee el motor == lo
+    // que hay en la DDR). Mismo protocolo: OUT 34/35/36 = direccion (el 36 dispara prefetch),
+    // OUT 37 = escribir byte y autoinc, IN 37 = byte prefetchado + prefetch encadenado de
+    // addr+1, IN 36 = {err, 3'b0, done=1, active=0, busy, ready=1}. Sin loader: done=ready=1.
+    reg        wdbgb_iorq_n = 1'b1, wdbgb_rd_n = 1'b1, wdbgb_wr_n = 1'b1, wdbgb_m1_n = 1'b1;
+    reg [7:0]  wdbgb_addr = 8'd0, wdbgb_din = 8'd0;
+    always @(posedge clk_54m) begin
+        wdbgb_iorq_n <= bus_iorq_n; wdbgb_rd_n <= bus_rd_n; wdbgb_wr_n <= bus_wr_n; wdbgb_m1_n <= bus_m1_n;
+        wdbgb_addr <= bus_addr[7:0]; wdbgb_din <= cpu_dout;
+    end
+    wire wdbg_sel    = (wdbgb_iorq_n == 1'b0) && (wdbgb_m1_n == 1'b1) && (wdbgb_addr[7:2] == 6'b001101);
+    wire wdbg_wr_any = wdbg_sel && (wdbgb_wr_n == 1'b0);
+    wire wdbg_rd_any = wdbg_sel && (wdbgb_rd_n == 1'b0);
+    assign wdbg_rd34_w = wdbg_rd_any && (wdbgb_addr[1:0] == 2'b00);
+    assign wdbg_rd35_w = wdbg_rd_any && (wdbgb_addr[1:0] == 2'b01);
+    assign wdbg_rd36_w = wdbg_rd_any && (wdbgb_addr[1:0] == 2'b10);
+    assign wdbg_rd37_w = wdbg_rd_any && (wdbgb_addr[1:0] == 2'b11);
+    reg  wdbg_wr_d1 = 1'b0, wdbg_wr_d2 = 1'b0, wdbg_rd37_d1 = 1'b0, wdbg_rd37_d2 = 1'b0;
+    always @(posedge clk_54m) begin
+        wdbg_wr_d1 <= wdbg_wr_any;  wdbg_wr_d2 <= wdbg_wr_d1;
+        wdbg_rd37_d1 <= wdbg_rd37_w; wdbg_rd37_d2 <= wdbg_rd37_d1;
+    end
+    wire wdbg_wr_stb   = wdbg_wr_d1 & ~wdbg_wr_d2;
+    wire wdbg_rd37_stb = ~wdbg_rd37_d1 & wdbg_rd37_d2;   // flanco de BAJADA del IN (_88)
+    reg  [21:0] wdbg_addr = 22'd0;
+    reg  [7:0]  wdbg_wdata = 8'd0;
+    reg         wdbg_req = 1'b0, wdbg_we = 1'b0, wdbg_busy = 1'b0, wdbg_inc_pend = 1'b0, wdbg_done_d = 1'b0;
+    wire        wdbg_done_t;
+    wire [7:0]  wdbg_diag2;
+    assign wdbg_status = {wdbg_diag2[7], 3'b000, 1'b1, 1'b0, wdbg_busy, 1'b1};
+    always @(posedge clk_54m) begin
+        wdbg_req <= 1'b0;
+        wdbg_done_d <= wdbg_done_t;
+        if (!bus_reset_n) begin
+            wdbg_addr <= 22'd0; wdbg_we <= 1'b0; wdbg_busy <= 1'b0; wdbg_inc_pend <= 1'b0; wdbg_wdata <= 8'd0;
+        end else begin
+            if (wdbg_busy && (wdbg_done_t != wdbg_done_d)) begin
+                wdbg_busy <= 1'b0;
+                if (wdbg_inc_pend) begin wdbg_addr <= wdbg_addr + 22'd1; wdbg_inc_pend <= 1'b0; end
+            end
+            if (wdbg_wr_stb) begin
+                case (wdbgb_addr[1:0])
+                2'b00: wdbg_addr[7:0]  <= wdbgb_din;
+                2'b01: wdbg_addr[15:8] <= wdbgb_din;
+                2'b10: begin
+                    wdbg_addr[21:16] <= wdbgb_din[5:0];
+                    if (!wdbg_busy) begin wdbg_we <= 1'b0; wdbg_req <= 1'b1; wdbg_busy <= 1'b1; end
+                end
+                2'b11: if (!wdbg_busy) begin
+                    wdbg_we <= 1'b1; wdbg_wdata <= wdbgb_din; wdbg_req <= 1'b1; wdbg_busy <= 1'b1; wdbg_inc_pend <= 1'b1;
+                end
+                endcase
+            end else if (wdbg_rd37_stb && !wdbg_busy) begin
+                wdbg_addr <= wdbg_addr + 22'd1;
+                wdbg_we <= 1'b0; wdbg_req <= 1'b1; wdbg_busy <= 1'b1;
+            end
+        end
+    end
+    reg  [1:0]  rst54w_s = 2'b00;
+    always @(posedge clk_54m) rst54w_s <= {rst54w_s[0], frst0_n};
+    wave_axi #(.BASE(32'h0F00_0000)) u_wave_dbg (
+        .clk(clk_54m), .aresetn(rst54w_s[1]), .eng_rst_n(bus_reset_n),
+        .eng_req(wdbg_req), .eng_we(wdbg_we), .eng_addr(wdbg_addr), .eng_wdata(wdbg_wdata),
+        .eng_rdata(wdbg_rdata), .eng_rword(), .eng_done_t(wdbg_done_t),
+        .diag(wdbg_diag2), .tel(),
+        .M_AWID(gp1_awid), .M_AWADDR(gp1_awaddr), .M_AWLEN(gp1_awlen), .M_AWSIZE(gp1_awsize),
+        .M_AWBURST(gp1_awburst), .M_AWLOCK(gp1_awlock), .M_AWCACHE(gp1_awcache), .M_AWPROT(gp1_awprot),
+        .M_AWQOS(gp1_awqos), .M_AWVALID(gp1_awvalid), .M_AWREADY(gp1_awready),
+        .M_WID(gp1_wid), .M_WDATA(gp1_wdata), .M_WSTRB(gp1_wstrb), .M_WLAST(gp1_wlast),
+        .M_WVALID(gp1_wvalid), .M_WREADY(gp1_wready),
+        .M_BID(gp1_bid), .M_BRESP(gp1_bresp), .M_BVALID(gp1_bvalid), .M_BREADY(gp1_bready),
+        .M_ARID(gp1_arid), .M_ARADDR(gp1_araddr), .M_ARLEN(gp1_arlen), .M_ARSIZE(gp1_arsize),
+        .M_ARBURST(gp1_arburst), .M_ARLOCK(gp1_arlock), .M_ARCACHE(gp1_arcache), .M_ARPROT(gp1_arprot),
+        .M_ARQOS(gp1_arqos), .M_ARVALID(gp1_arvalid), .M_ARREADY(gp1_arready),
+        .M_RID(gp1_rid), .M_RDATA(gp1_rdata), .M_RRESP(gp1_rresp), .M_RLAST(gp1_rlast),
+        .M_RVALID(gp1_rvalid), .M_RREADY(gp1_rready)
+    );
+`ifdef ENABLE_WAVE_DDR3
+    // _103: BUS REGISTRADO''', label="wave_axi")
+# la rama else del bloque WAVE_DDR3 dejaba el puerto 34-37h en reposo: ahora lo conduce el bloque de arriba
+rep("""`else
+    assign wdbg_rd34_w = 1'b0;
+    assign wdbg_rd35_w = 1'b0;
+    assign wdbg_rd36_w = 1'b0;
+    assign wdbg_rd37_w = 1'b0;
+    assign wdbg_status = 8'hFF;
+    assign wdbg_rdata  = 8'hFF;
+    assign wdbg_diag_ddr3 = 8'hFF;
+""", """`else
+    // ZYNQ: wdbg_* (puerto 34-37h) los conduce el bloque wave_axi/GP1 de arriba
+""", label="wdbg else")
+# y el mux de lectura de E/S los expone aunque no haya WAVE_DDR3
+rep("""                    `ifdef ENABLE_WAVE_DDR3
+                     ( wdbg_rd34_w == 1 ) ? wdbg_diag_ddr3 :""",
+    """                    `ifdef ENABLE_OPL4_WAVE   // ZYNQ: puerto 34-37h sobre wave_axi/GP1
+                     ( wdbg_rd34_w == 1 ) ? wdbg_diag_ddr3 :""", label="mux 34-37h")
 rep("//`define ENABLE_V9968_VDP ", "`define ENABLE_V9968_VDP ", label="v9968")
 rep("//`define ENABLE_VRAM_DDR3 ", "`define ENABLE_VRAM_AXI   // Zynq: v9968_axi_backend (HP0). Era ENABLE_VRAM_DDR3 ", label="vram_axi")
 # el define anidado de ADPCM_SDRAM (bajo VRAM_DDR3) NO debe activarse: queda el fallback BSRAM
@@ -110,6 +250,16 @@ rep_span("module top\n", r"^\);[ \t]*\n", '''module top_zynq
     input  wire        esp_rx_i,       // W16 (CAM1-26) <- TX del ESP (PULLUP: reposo sin modulo)
     output wire        esp_tx_o,       // R18 (CAM1-28) -> RX del ESP
     output wire        esp_turbo_o,    // P19 (CAM1-30) -> GPIO del ESP (estado del turbo)
+
+    // OLED 128x64 del conector J4 (SSD1306, SPI de 4 hilos). NO lo conduce el PL: son 4
+    // GPIO EMIO del PS y el protocolo lo hace el ARM (arm/companion/oled.c), asi se puede
+    // cambiar sin recompilar. Pines en top_zynq_oled.xdc. Van como INOUT porque el bd saca
+    // el GPIO con sus IOBUF dentro (puerto unico OLED_GPIO_tri_io); el sentido lo manda
+    // el ARM con DIRM/OEN del GPIO, que oled_init pone a salida.
+    inout  wire        oled_sclk,      // E18 -> D0 del modulo (reloj)
+    inout  wire        oled_sdin,      // E19 -> D1 del modulo (dato)
+    inout  wire        oled_dc,        // F16 -> D/C
+    inout  wire        oled_rst_n,     // F17 -> RST
 
     // ---- PS7: DDR3 + MIO (pines fijos del PS, sin .xdc) ----
     inout  wire [14:0] DDR_addr,
@@ -224,6 +374,27 @@ rep_span("module top\n", r"^\);[ \t]*\n", '''module top_zynq
     wire [1:0]  hp3_arburst, hp3_arlock; wire [3:0] hp3_arcache; wire [2:0] hp3_arprot; wire [3:0] hp3_arqos;
     wire        hp3_arvalid, hp3_arready;
     wire [5:0]  hp3_rid;    wire [63:0] hp3_rdata;   wire [1:0] hp3_rresp;  wire hp3_rlast, hp3_rvalid, hp3_rready;
+    // GP0 = memoria de ondas del OPL4 (zynq/wave_axi.v, 32 bits) a clk_wave375
+    wire [5:0]  gp0_awid;   wire [31:0] gp0_awaddr;  wire [3:0] gp0_awlen;   wire [2:0] gp0_awsize;
+    wire [1:0]  gp0_awburst, gp0_awlock; wire [3:0] gp0_awcache; wire [2:0] gp0_awprot; wire [3:0] gp0_awqos;
+    wire        gp0_awvalid, gp0_awready;
+    wire [5:0]  gp0_wid;    wire [31:0] gp0_wdata;   wire [3:0] gp0_wstrb;  wire gp0_wlast, gp0_wvalid, gp0_wready;
+    wire [5:0]  gp0_bid;    wire [1:0]  gp0_bresp;   wire gp0_bvalid, gp0_bready;
+    wire [5:0]  gp0_arid;   wire [31:0] gp0_araddr;  wire [3:0] gp0_arlen;   wire [2:0] gp0_arsize;
+    wire [1:0]  gp0_arburst, gp0_arlock; wire [3:0] gp0_arcache; wire [2:0] gp0_arprot; wire [3:0] gp0_arqos;
+    wire        gp0_arvalid, gp0_arready;
+    wire [5:0]  gp0_rid;    wire [31:0] gp0_rdata;   wire [1:0] gp0_rresp;  wire gp0_rlast, gp0_rvalid, gp0_rready;
+    wire [23:0] wave_tel;             // telemetria de wave_axi: {lat_max, rd_cnt, wr_cnt}
+    // GP1 = puerto de depuracion 34-37h de la memoria de ondas (2a wave_axi, 32 bits) a clk_54m
+    wire [5:0]  gp1_awid;   wire [31:0] gp1_awaddr;  wire [3:0] gp1_awlen;   wire [2:0] gp1_awsize;
+    wire [1:0]  gp1_awburst, gp1_awlock; wire [3:0] gp1_awcache; wire [2:0] gp1_awprot; wire [3:0] gp1_awqos;
+    wire        gp1_awvalid, gp1_awready;
+    wire [5:0]  gp1_wid;    wire [31:0] gp1_wdata;   wire [3:0] gp1_wstrb;  wire gp1_wlast, gp1_wvalid, gp1_wready;
+    wire [5:0]  gp1_bid;    wire [1:0]  gp1_bresp;   wire gp1_bvalid, gp1_bready;
+    wire [5:0]  gp1_arid;   wire [31:0] gp1_araddr;  wire [3:0] gp1_arlen;   wire [2:0] gp1_arsize;
+    wire [1:0]  gp1_arburst, gp1_arlock; wire [3:0] gp1_arcache; wire [2:0] gp1_arprot; wire [3:0] gp1_arqos;
+    wire        gp1_arvalid, gp1_arready;
+    wire [5:0]  gp1_rid;    wire [31:0] gp1_rdata;   wire [1:0] gp1_rresp;  wire gp1_rlast, gp1_rvalid, gp1_rready;
 ''', label="cabecera del modulo")
 
 # ---------------------------------------------------------------- 3. relojes
@@ -545,11 +716,10 @@ if not NO_MB:
     wire        r15_wr = (bus_addr[7:0] == 8'hA1 && bus_iorq_n == 1'b0 && bus_wr_n == 1'b0 && bus_m1_n == 1'b1
                           && psg_addr_latch == 4'd15);
     reg         r15_wr_d = 1'b0;
-    reg  [23:0] r15_hist = 24'd0;
     reg  [7:0]  r15_cnt = 8'd0;
     always @(posedge clk_54m) begin
         r15_wr_d <= r15_wr;
-        if (r15_wr && !r15_wr_d) begin r15_hist <= {r15_hist[15:0], cpu_dout}; r15_cnt <= r15_cnt + 8'd1; end
+        if (r15_wr && !r15_wr_d) r15_cnt <= r15_cnt + 8'd1;
     end
     assign msx_mouse_present = mo_seen_s1 | mb_mouse_seen;
 """, label="raton buzon: present")
@@ -589,7 +759,7 @@ s += '''
         .tel_dbg2({sd_ram_blocks, sdio_count, sd_timeout_error_w, sd_crc_error_w, sd_rcrc_error_w, ff_sd_init, sd_card_stat_w}),
         // +0x60: raton y mandos (buzon HID): {present, port2, strobe, phase[2:0], 2'b0}, dx, dy, informes | data, joy0, joy1, 0
         .tel_dbg3({msx_mouse_present, psg_reg15_port2, psgPB[5], msx_mouse_phase, 2'b00, mb_mouse_dx, mb_mouse_dy, mb_rep_cnt}),
-        .tel_dbg4({r15_hist, r15_cnt}),
+        .tel_dbg4({wave_tel, r15_cnt}),     // +0x60: {lat_max AR->R (ciclos 37,5 MHz), lecturas, escrituras} de wave_axi + cuenta r15
         .M_AWID(hp2_awid), .M_AWADDR(hp2_awaddr), .M_AWLEN(hp2_awlen), .M_AWSIZE(hp2_awsize),
         .M_AWBURST(hp2_awburst), .M_AWLOCK(hp2_awlock), .M_AWCACHE(hp2_awcache), .M_AWPROT(hp2_awprot),
         .M_AWQOS(hp2_awqos), .M_AWVALID(hp2_awvalid), .M_AWREADY(hp2_awready),
@@ -604,11 +774,13 @@ s += '''
     );
 
     // ================================================================
-    //  ZYNQ: PS7 (DDR3 + MIO + FCLK0 + HP0..HP3). Block design: zynq/bd_ps7.tcl
+    //  ZYNQ: PS7 (DDR3 + MIO + FCLK0 + HP0..HP3 + GP0). Block design: zynq/bd_ps7.tcl
     //  HP0 = VRAM (v9968_axi_backend) a FCLK0 = 150 MHz
     //  HP1 = RAM del Z80 (memory_axi) a clk_54m
     //  HP2 = buzon xsdb (dbg_mailbox_axi) a clk_54m
     //  HP3 = proxy de sectores "SD" (sd_axi_proxy) a clk_27m; su req_irq -> IRQ_F2P[0]
+    //  GP0 = memoria de ondas del OPL4 (wave_axi, 32 bits) a clk_wave375
+    //  GP1 = puerto de depuracion 34-37h de esa memoria (2a wave_axi) a clk_54m
     // ================================================================
     ps7_bd_wrapper ps7 (
         .DDR_addr(DDR_addr), .DDR_ba(DDR_ba), .DDR_cas_n(DDR_cas_n), .DDR_ck_n(DDR_ck_n),
@@ -621,6 +793,7 @@ s += '''
         .FCLK_CLK0(fclk0), .FCLK_RESET0_N(frst0_n), .IRQ_F2P(sd_irq),
         .UART0_TX(bl616_jtagsel), .UART0_RX(iosys_uart_tx),     // el ARM habla con iosys_bl616 (OSD)
         .HP0_ACLK(fclk0), .HP1_ACLK(clk_54m), .HP2_ACLK(clk_54m), .HP3_ACLK(clk_27m),
+        .GP0_ACLK(clk_wave375), .GP1_ACLK(clk_54m),
         .S_AXI_HP0_awid(hp0_awid), .S_AXI_HP0_awaddr(hp0_awaddr), .S_AXI_HP0_awlen(hp0_awlen),
         .S_AXI_HP0_awsize(hp0_awsize), .S_AXI_HP0_awburst(hp0_awburst), .S_AXI_HP0_awlock(hp0_awlock),
         .S_AXI_HP0_awcache(hp0_awcache), .S_AXI_HP0_awprot(hp0_awprot), .S_AXI_HP0_awqos(hp0_awqos),
@@ -672,7 +845,34 @@ s += '''
         .S_AXI_HP3_arcache(hp3_arcache), .S_AXI_HP3_arprot(hp3_arprot), .S_AXI_HP3_arqos(hp3_arqos),
         .S_AXI_HP3_arvalid(hp3_arvalid), .S_AXI_HP3_arready(hp3_arready),
         .S_AXI_HP3_rid(hp3_rid), .S_AXI_HP3_rdata(hp3_rdata), .S_AXI_HP3_rresp(hp3_rresp),
-        .S_AXI_HP3_rlast(hp3_rlast), .S_AXI_HP3_rvalid(hp3_rvalid), .S_AXI_HP3_rready(hp3_rready)
+        .S_AXI_HP3_rlast(hp3_rlast), .S_AXI_HP3_rvalid(hp3_rvalid), .S_AXI_HP3_rready(hp3_rready),
+        .S_AXI_GP0_awid(gp0_awid), .S_AXI_GP0_awaddr(gp0_awaddr), .S_AXI_GP0_awlen(gp0_awlen),
+        .S_AXI_GP0_awsize(gp0_awsize), .S_AXI_GP0_awburst(gp0_awburst), .S_AXI_GP0_awlock(gp0_awlock),
+        .S_AXI_GP0_awcache(gp0_awcache), .S_AXI_GP0_awprot(gp0_awprot), .S_AXI_GP0_awqos(gp0_awqos),
+        .S_AXI_GP0_awvalid(gp0_awvalid), .S_AXI_GP0_awready(gp0_awready),
+        .S_AXI_GP0_wid(gp0_wid), .S_AXI_GP0_wdata(gp0_wdata), .S_AXI_GP0_wstrb(gp0_wstrb),
+        .S_AXI_GP0_wlast(gp0_wlast), .S_AXI_GP0_wvalid(gp0_wvalid), .S_AXI_GP0_wready(gp0_wready),
+        .S_AXI_GP0_bid(gp0_bid), .S_AXI_GP0_bresp(gp0_bresp), .S_AXI_GP0_bvalid(gp0_bvalid), .S_AXI_GP0_bready(gp0_bready),
+        .S_AXI_GP0_arid(gp0_arid), .S_AXI_GP0_araddr(gp0_araddr), .S_AXI_GP0_arlen(gp0_arlen),
+        .S_AXI_GP0_arsize(gp0_arsize), .S_AXI_GP0_arburst(gp0_arburst), .S_AXI_GP0_arlock(gp0_arlock),
+        .S_AXI_GP0_arcache(gp0_arcache), .S_AXI_GP0_arprot(gp0_arprot), .S_AXI_GP0_arqos(gp0_arqos),
+        .S_AXI_GP0_arvalid(gp0_arvalid), .S_AXI_GP0_arready(gp0_arready),
+        .S_AXI_GP0_rid(gp0_rid), .S_AXI_GP0_rdata(gp0_rdata), .S_AXI_GP0_rresp(gp0_rresp),
+        .S_AXI_GP0_rlast(gp0_rlast), .S_AXI_GP0_rvalid(gp0_rvalid), .S_AXI_GP0_rready(gp0_rready),
+        .S_AXI_GP1_awid(gp1_awid), .S_AXI_GP1_awaddr(gp1_awaddr), .S_AXI_GP1_awlen(gp1_awlen),
+        .S_AXI_GP1_awsize(gp1_awsize), .S_AXI_GP1_awburst(gp1_awburst), .S_AXI_GP1_awlock(gp1_awlock),
+        .S_AXI_GP1_awcache(gp1_awcache), .S_AXI_GP1_awprot(gp1_awprot), .S_AXI_GP1_awqos(gp1_awqos),
+        .S_AXI_GP1_awvalid(gp1_awvalid), .S_AXI_GP1_awready(gp1_awready),
+        .S_AXI_GP1_wid(gp1_wid), .S_AXI_GP1_wdata(gp1_wdata), .S_AXI_GP1_wstrb(gp1_wstrb),
+        .S_AXI_GP1_wlast(gp1_wlast), .S_AXI_GP1_wvalid(gp1_wvalid), .S_AXI_GP1_wready(gp1_wready),
+        .S_AXI_GP1_bid(gp1_bid), .S_AXI_GP1_bresp(gp1_bresp), .S_AXI_GP1_bvalid(gp1_bvalid), .S_AXI_GP1_bready(gp1_bready),
+        .S_AXI_GP1_arid(gp1_arid), .S_AXI_GP1_araddr(gp1_araddr), .S_AXI_GP1_arlen(gp1_arlen),
+        .S_AXI_GP1_arsize(gp1_arsize), .S_AXI_GP1_arburst(gp1_arburst), .S_AXI_GP1_arlock(gp1_arlock),
+        .S_AXI_GP1_arcache(gp1_arcache), .S_AXI_GP1_arprot(gp1_arprot), .S_AXI_GP1_arqos(gp1_arqos),
+        .S_AXI_GP1_arvalid(gp1_arvalid), .S_AXI_GP1_arready(gp1_arready),
+        .S_AXI_GP1_rid(gp1_rid), .S_AXI_GP1_rdata(gp1_rdata), .S_AXI_GP1_rresp(gp1_rresp),
+        .S_AXI_GP1_rlast(gp1_rlast), .S_AXI_GP1_rvalid(gp1_rvalid), .S_AXI_GP1_rready(gp1_rready),
+        .OLED_GPIO_tri_io({oled_rst_n, oled_dc, oled_sdin, oled_sclk})   // EMIO 3..0 = RST, D/C, D1, D0
     );
 
 endmodule

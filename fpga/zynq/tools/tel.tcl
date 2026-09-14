@@ -14,12 +14,13 @@ puts "buzon teclado: [format %08X-%08X-%08X-%08X [lindex $kbd 3] [lindex $kbd 2]
 for {set k 0} {$k < $n} {incr k} {
     set v [mrd -value [expr {$MBOX + 0x40}] 10]
     lassign $v magic seq hits miss echo st d2 d d4 d3
-    # +0x60 d3 = {present[31], port2[30], strobe[29], phase[28:26], dx[23:16], dy[15:8], informes[7:0]}
-    #       d4 = {ultimos 3 valores escritos en PSG reg 15 [31:8] (el mas nuevo en [15:8]), escrituras[7:0]}
-    puts [format "   raton: present=%d port2=%d strobe=%d fase=%d dx=%d dy=%d informes=%d | PSG r15: escrituras=%d ultimos=%02X %02X %02X" \
+    # +0x64 d3 = {present[31], port2[30], strobe[29], phase[28:26], dx[23:16], dy[15:8], informes[7:0]}
+    # +0x60 d4 = {wave_axi: lat_max AR->R en ciclos de 37,5 MHz [31:24], lecturas[23:16], escrituras[15:8]; PSG r15 escrituras[7:0]}
+    puts [format "   raton: present=%d port2=%d strobe=%d fase=%d dx=%d dy=%d informes=%d | PSG r15: escrituras=%d" \
         [expr {($d3>>31)&1}] [expr {($d3>>30)&1}] [expr {($d3>>29)&1}] [expr {($d3>>26)&7}] \
-        [expr {((($d3>>16)&255)^128)-128}] [expr {((($d3>>8)&255)^128)-128}] [expr {$d3&255}] \
-        [expr {$d4&255}] [expr {($d4>>24)&255}] [expr {($d4>>16)&255}] [expr {($d4>>8)&255}]]
+        [expr {((($d3>>16)&255)^128)-128}] [expr {((($d3>>8)&255)^128)-128}] [expr {$d3&255}] [expr {$d4&255}]]
+    puts [format "   opl4 wave (GP0): lat_max=%d ciclos (%.0f ns) lecturas=%d escrituras=%d (contadores de 8 bits)" \
+        [expr {($d4>>24)&255}] [expr {(($d4>>24)&255)*1000.0/37.5}] [expr {($d4>>16)&255}] [expr {($d4>>8)&255}]]
     # d2 = {sd_ram_blocks[31:16], sdio_count[15:8], timeout[7], crc[6], rcrc[5], init[4], card_stat[3:0]}
     puts [format "   sdproxy: ordenes=%u rcount=%u timeout=%d crc=%d rcrc=%d init=%d stat=%d" \
         [expr {$d2>>16}] [expr {($d2>>8)&255}] [expr {($d2>>7)&1}] [expr {($d2>>6)&1}] [expr {($d2>>5)&1}] [expr {($d2>>4)&1}] [expr {$d2&15}]]

@@ -32,6 +32,7 @@ add_files ./vivado_prj/msximus_zynq.srcs/sources_1/bd/ps7_bd/hdl/ps7_bd_wrapper.
 set v {}
 foreach f [glob $fpga/opl3/*.sv $fpga/opl3/*.v] { lappend v $f }
 lappend v $fpga/src/opl4fm.v
+lappend v $fpga/opl4wave/ymf278b_gowin.v   ;# motor PCM YMF278B (sv2v de opl4wave/*.sv, RAMs inferibles)
 lappend v $fpga/src/opl4_pcm.v
 foreach f [glob $fpga/jtopl/*.v] { lappend v $f }
 foreach f [glob $fpga/jt10/*.v] { lappend v $f }
@@ -51,7 +52,7 @@ lappend v $here/gowin_dpb_menu.v      ;# RAM del menu inferible (tools/make_dpb_
 foreach f {usb_hid_host.v usb_kbd_decode.v} { lappend v $fpga/src/usb_direct/$f }
 # ---- Zynq ----
 lappend v $here/gowin_prims.v $here/memory_axi.v $here/v9968_axi_backend.v $here/dbg_mailbox_axi.v
-lappend v $here/sd_axi_proxy.v $here/top_zynq.v
+lappend v $here/sd_axi_proxy.v $here/wave_axi.v $here/top_zynq.v
 add_files $v
 # El build del Tang compila TODO como SystemVerilog (-verilog_std sysv2017) y hay
 # .v con `int`, `logic`, `always_ff`... (dpram.v, ...). Misma semantica aqui.
@@ -80,6 +81,7 @@ add_files $vh
 
 add_files -fileset constrs_1 $here/top_zynq.xdc
 add_files -fileset constrs_1 $here/top_zynq_esp.xdc
+add_files -fileset constrs_1 $here/top_zynq_oled.xdc
 # microSD en el header: sus pines van aparte; ZYNQ_NO_SD=1 (biseccion) deja los sd_* en tie-off
 if {!([info exists ::env(ZYNQ_NO_SD)] && $::env(ZYNQ_NO_SD) eq "1")} {
     add_files -fileset constrs_1 $here/top_zynq_sd.xdc

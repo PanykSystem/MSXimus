@@ -11,6 +11,7 @@
 #include "xil_types.h"
 #include "sleep.h"
 #include "log.h"
+#include "oled.h"
 
 #define REG(a)          (*(volatile u32 *)(a))
 #define MBOX            0x1FF00000u
@@ -41,6 +42,7 @@ extern u64 gt_now(void);
 extern u32 usb_stats_mount, usb_stats_reports, usb_n_kbd, usb_n_mouse, usb_n_pad;
 extern volatile u32 osd_hotkey;                       /* usb_host.c: pulsaciones de F12 */
 
+s32         osd_temp_dc;                              /* die en decimas de C; lo lee tambien oled.c */
 static int  osd_on;
 static u32  hotkey_seen, ctrl_seen;
 static u64  t_next, t_start;                          /* t_start: el timer global no se resetea al recargar el programa */
@@ -152,10 +154,15 @@ static void osd_render(void)
     p = put_str(pg[10], " informes HID "); p = put_u(p, usb_stats_reports); *p = 0;
     p = put_str(pg[12], "MSX  SCREEN "); p = put_u(p, z80[0xFCAF - 0xC000]); p = put_str(p, "   (en pausa)"); *p = 0;
     p = put_str(pg[13], " RAM Z80 cache "); p = put_fix(p, (s32)pct10, 1); p = put_str(p, "% aciertos"); *p = 0;
+    /* +0x60 (tel_dbg4): wave_axi (OPL4 en la DDR por GP0) = {lat_max AR->R en ciclos de 37,5 MHz
+     * (x 26,67 ns), lecturas, escrituras; contadores de 8 bits} */
+    p = put_str(pg[14], " OPL4 wave lat "); p = put_u(p, ((tel[8] >> 24) & 0xFFu) * 80u / 3u); p = put_str(p, "ns rd ");
+    p = put_u(p, (tel[8] >> 16) & 0xFFu); p = put_str(p, " wr "); p = put_u(p, (tel[8] >> 8) & 0xFFu); *p = 0;
     p = put_str(pg[15], "uptime "); p = put_2(p, up / 3600u); *p++ = ':'; p = put_2(p, (up / 60u) % 60u); *p++ = ':'; p = put_2(p, up % 60u);
     p = put_str(p, "  bucle "); p = put_u(p, sb[12] / 1000u); p = put_str(p, "k"); *p = 0;
     put_str(pg[27], "F12 o osd.tcl off: cerrar")[0] = 0;
 
+    osd_temp_dc = t;
     OSD_STAT = 1u | ((u32)(t & 0xFFFF) << 16);
     osd_overlay(1);
     for (int r = 0; r < ROWS; r++) osd_line((u8)r, pg[r]);
@@ -166,6 +173,7 @@ void osd_init(void)
 {
     uart_init();
     xadc_init();
+    oled_init();                                       /* OLED de la placa (J4): estado permanente */
     osd_on = 0; hotkey_seen = osd_hotkey; ctrl_seen = OSD_CTRL & 1u;
     OSD_STAT = 0u;
     osd_overlay(0);
@@ -185,5 +193,6 @@ void osd_poll(void)
     if (!changed && now < t_next) return;
     t_next = now + (u64)COUNTS_PER_SECOND;
     if (osd_on) osd_render();
-    else { osd_overlay(0); OSD_STAT = (u32)(xadc_temp_dc(xadc_rd(0x00)) & 0xFFFF) << 16; }
+    else { osd_overlay(0); osd_temp_dc = xadc_temp_dc(xadc_rd(0x00)); OSD_STAT = (u32)(osd_temp_dc & 0xFFFF) << 16; }
+    oled_tick();                                                    /* el OLED se refresca con el OSD encendido o apagado */
 }

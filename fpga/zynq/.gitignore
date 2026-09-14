@@ -21,3 +21,4 @@ arm/boot/BOOT.bin
 arm/boot/pack.bin
 arm/boot/zeros.bin
 arm/boot/boot.bif
+arm/boot/yrw801.rom

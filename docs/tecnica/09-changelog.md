@@ -106,7 +106,7 @@ Core: dado 3533, 1d3ab9ee, margen 0,913 ns; respaldo 3541 (0,039 ns, en el térm
 
 `cpu_run`, el término de seis señales que gobierna el refresco de la SDRAM, pasa a registrado antes de entrar al controlador de memoria: era el peor camino de temporización en los tres dados de la v3.6c. Commit 74f95de. Entra en la siguiente campaña.
 
-## v3.6e (14 de septiembre, sin campaña)
+## v3.6e (14 de septiembre, interna)
 
 Dos errores del core que salieron a la luz portándolo a la Zynq (`fpga/zynq/`, repo privado `MSXimus_zynq`), donde el buzón de depuración permite inyectar mandos y ratón y leer la telemetría sin hardware. Los dos están en `top.v` y afectan igual a la Console 60K; entran en la siguiente campaña.
 
@@ -114,13 +114,15 @@ Dos errores del core que salieron a la luz portándolo a la Zynq (`fpga/zynq/`, 
 - **El ratón perdía el movimiento**: la relectura del registro 15 del PSG devolvía FFh (solo el 14 estaba implementado en la multiplexación de `cpu_din`; el `O_DA` del YM2149 sigue sin conectar). La interrupción de la BIOS lee, modifica y escribe ese registro dos veces por frame para los gatillos de `ON STRIG` (puerto 1 `AND AFh OR 03h`, puerto 2 `AND DFh OR 4Ch`): con FFh de partida escribía AFh y luego DFh, es decir, el pin 8 del puerto 2 subía y bajaba a 60 Hz, y cada pulso hacía que `msx_mouse` capturase y vaciase su acumulador en un ciclo fantasma que nadie leía. `PAD(17)`/`PAD(18)` devolvían 0 salvo con programas que leen cada frame (INDEV lo disimulaba). Ahora el registro 15 se relee (`psgPB`) y las escrituras quedan en CFh/8Fh, con el pin 8 quieto.
 - `msx_mouse` gana dos salidas de diagnóstico (`dbg_cur_x`, `dbg_rel_x`) que en la 60K quedan sin conectar.
 
-Commits 39289a2 y el de la revisión del 14 de septiembre en MSX_up_v3 (rama V3.5). El ratón y el eje vertical se validaron en la Zynq desde BASIC: `STICK(1)` 1/5/7/3 para arriba/abajo/izquierda/derecha, `PAD(17)` = 20 para un delta de 80 (sensibilidad ÷4), botones del ratón en `STRIG(2)`/`STRIG(4)`; el eje horizontal corregido pide recompilar el companion de la Zynq y volver a pasar `STICK`, y en la 60K probar un mando por el USB-C del BL616 con el core de la siguiente campaña. Queda confirmar el sentido del ratón (`NEGAR_DELTA`) con un programa real.
+Commits 39289a2 y 816937c en MSX_up_v3 (rama V3.5). El ratón y la cruceta se validaron en la Zynq desde BASIC: `STICK(1)` 1/5/7/3 para arriba/abajo/izquierda/derecha, `STRIG(1)`/`STRIG(3)` con A/B, `PAD(17)` = 20 para un delta de 80 (sensibilidad ÷4). Queda confirmar el sentido del ratón (`NEGAR_DELTA`) con un programa real.
+
+Core: dado 3557, e67ba712, margen 1,170 ns (el peor camino es ahora interno del V9968: el término del refresco que registró la v3.6d ha salido del informe). Los dados 3547 y 3559 no rutaron (425 y 84 redes sin rutar), así que no hay respaldo. Campaña v36e, quince minutos de place and route en el dado bueno. Es el primer core de la 60K con el que se puede probar un mando.
 
 Un apunte que sale de la misma revisión, sin arreglar: los registros 0 a 13 del PSG tampoco se releen (devuelven FFh; `O_DA` del YM2149 está sin conectar, aunque el modelo sí los sirve). Ningún juego probado lo ha echado en falta, pero un reproductor que haga `RDPSG 7` para tocar el mezclador se encontraría todo silenciado.
 
 ## Pendiente
 
-- Campaña de la 60K con la v3.6d y la v3.6e (mandos y ratón), y probar un mando en la 60K: no se sabe de ninguno que haya funcionado con las direcciones bien desde la v3.1.
+- Validar en la 60K el dado 3557: un mando real por el USB-C del BL616 (no se sabe de ninguno que haya funcionado con las direcciones bien desde la v3.1) y el ratón sin INDEV.
 - Fase 3 de la SD: reloj de la tarjeta a 13,5 MHz, que exige rehacer el divisor y el muestreo.
 - Guardado de Manbow 2, que usa una flash AMD en el cartucho en vez de SRAM.
 - Publicar la v3.6: carpeta de release, notas y créditos.

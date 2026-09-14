@@ -43,7 +43,7 @@ vídeo. El XC7Z020 tiene 4 MMCM + 4 PLL; sobran.
 | `v9968_ddr3_backend` (IP DDR3 Gowin) | **`v9968_axi_backend`** → HP0 | ✅ validado |
 | `memory_ctrl` (SDRAM W9825, puertos `ram_*` Z80 + `wv*`) | **`memory_axi`** → HP1, caché en BRAM | ⏳ siguiente |
 | `adpcm_sdram` (ADPCM Y8950, 32 KB) | `adpcm_bram` (cabe: 256 Kb) | ⏳ |
-| `wave_sdram` (ondas OPL4, puerto `wv` de memory_ctrl) | puerto `wv` de `memory_axi` | ⏳ |
+| `wave_sdram` (ondas OPL4, puerto `wv` de memory_ctrl) | **`wave_axi`** → `S_AXI_GP0` a 37,5 MHz (mismo reloj que el motor, sin CDC); YRW801 en DDR 0x0F000000 + 2 MB de RAM de muestras | 🔨 14/09 noche |
 | `flash` (`flash_rw`: BIOS/packs/YRW801 de la SPI al SDRAM) | **el PS carga los packs en la DDR** (xsdb `dow -data` hoy; FSBL/app desde QSPI mañana). En el PL, `flash_idle=1`. | ⏳ |
 
 ### B3. Se va al PS o desaparece
@@ -299,8 +299,19 @@ Los 4 × USB del PL ya no hacen falta (el USB es el P3 del PS).
      Albert tiene un S3 (1732S019) parado y las C6 en uso: para la Zynq basta el WiFi UNAPI
      (la pantalla la hace el OSD del ARM y el turbo lo lleva el menú), así que el S3 vale
      con su firmware de UART validado el 22/08; si más adelante se pincha un C6, mismo cable.
-   - 🔜 OPL4 tabla de ondas: `wave_axi.v` sobre `S_AXI_GP0` (o HP2 compartido), reloj de
-     37,5 MHz, `boot.tcl` carga `yrw801.rom` en la DDR. Empieza la noche del 14/09.
+   - 🔨 OPL4 tabla de ondas (14/09 noche, en placa por validar): `zynq/wave_axi.v` = la cara
+     de motor de `wave_sdram` (`eng_*`, byte + palabra de 16 bits, toggle de fin) como maestro
+     AXI3 de 32 bits en `S_AXI_GP0` con `clk_wave375` (37,5 MHz, el reloj del propio motor:
+     sin CDC), una transacción de un beat por acceso. `ENABLE_OPL4_WAVE` sigue activo en el
+     generador con las guardas de WAVE_DDR3/LOADER neutralizadas y `wdbg_ready = wl_done = 1`:
+     la YRW801 (2 MB) la carga `boot.tcl` (`WAVE_ROM=`) o la partición `[load=0x0F000000]` del
+     BOOT.bin, y los 2 MB siguientes son la RAM de muestras. Sin loader. El puerto de
+     depuración 34‑37h del Tang se conserva (opl4test lo usa) con una segunda `wave_axi` en
+     `S_AXI_GP1` a clk_54m y una FSM propia en el generador (IN 36h = done y ready fijos a 1).
+     Telemetría en MBOX+0x60: latencia máxima AR→R en ciclos, lecturas y escrituras
+     (`tel.tcl` y la página del OSD). Validación: `tools/opl4test/opl4test.rom` (detección
+     `SI 2031`, YRW801 == debug, RAM 2 MB, The Entertainer al piano) y después VGMPlay con
+     packs MoonSound / MBWave.
    - 🔜 **Cinta TSX, pendiente TRAS el ESP32 y las descargas**: el `.tsx` vive en la SD
      (lo baja el File‑Hunter por el C6/S3 o se copia), el ARM lo convierte (port de
      `tsx2cvs`) y alimenta `cas_stream.v` (KCS, validado en el MSXnano) por una FIFO en

@@ -57,6 +57,19 @@ set head [mrd -value $packaddr 2]
 set tail [mrd -value [expr {$packaddr + 0x80000 - 4}] 3]
 puts "DDR: cabeza [format %08X [lindex $head 0]] [format %08X [lindex $head 1]]  cola+firma [format %08X [lindex $tail 1]] [format %08X [lindex $tail 2]]"
 
+# 3a) memoria de ondas del OPL4 (zynq/wave_axi.v por S_AXI_GP0): la YRW801 (2 MB) en
+#     WAVE_BASE 0x0F000000; los 2 MB siguientes son la RAM de muestras del MoonSound.
+#     WAVE_ROM=fichero para otra ROM; WAVE_ROM=none para no cargarla.
+set WAVE_BASE 0x0F000000
+set wave [expr {[info exists ::env(WAVE_ROM)] ? $::env(WAVE_ROM) : "$here/../../../mi_release/3.1/yrw801.rom"}]
+if {$wave ne "none"} {
+    if {![file exists $wave]} { puts "ERROR: no existe la ROM de ondas $wave"; exit 1 }
+    puts "wave: $wave ([file size $wave] bytes) -> [format 0x%08X $WAVE_BASE]"
+    mwr -bin -file $wave $WAVE_BASE [expr {([file size $wave] + 3) / 4}]
+    set wh [mrd -value $WAVE_BASE 1]
+    puts [format "wave: cabeza %08X (YRW801 real: bytes 40 18 00 00 = 00001840 en little-endian)" [lindex $wh 0]]
+}
+
 # 3b) buzon de depuracion (dbg_mailbox_axi, HP2) a cero ANTES de soltar el PL:
 #     la DDR arranca con basura y el PL la leeria como teclas pulsadas.
 set MBOX 0x1FF00000

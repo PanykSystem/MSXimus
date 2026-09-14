@@ -43,5 +43,11 @@ set_clock_groups -asynchronous \
     -group [get_clocks {pD_86}] \
     -group [get_clocks {pE_12}] \
     -group [get_clocks {clk_fpga_0}]
+# clk_54m <-> clk_wave375 (OPL4: host en 54, motor en 37,5): en el mismo VCO sus flancos
+# se alinean cada 0,74 ns y Vivado exige eso a los cruces de opl4_pcm (-1,45 ns, 94
+# endpoints, 14/09). Son cruces por toggle sincronizado con el dato quieto, asi que
+# basta acotar el retardo del dato a un periodo del reloj rapido (datapath only).
+set_max_delay -datapath_only -from [get_clocks mA_54]  -to [get_clocks mA_375] 18.518
+set_max_delay -datapath_only -from [get_clocks mA_375] -to [get_clocks mA_54]  18.518
 
 set_property BITSTREAM.GENERAL.COMPRESS TRUE [current_design]

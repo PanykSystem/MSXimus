@@ -101,6 +101,10 @@ set_property -dict [list \
     CONFIG.PCW_TTC0_PERIPHERAL_ENABLE {0} \
     CONFIG.PCW_GPIO_MIO_GPIO_ENABLE {0} \
     \
+    CONFIG.PCW_USE_S_AXI_GP0 {1} \
+    CONFIG.PCW_USE_S_AXI_GP1 {1} \
+    CONFIG.PCW_GPIO_EMIO_GPIO_ENABLE {1} \
+    CONFIG.PCW_GPIO_EMIO_GPIO_IO {4} \
     CONFIG.PCW_USE_M_AXI_GP0 {0} \
     CONFIG.PCW_USE_M_AXI_GP1 {0} \
     CONFIG.PCW_USE_S_AXI_HP0 {1} \
@@ -136,6 +140,24 @@ for {set n 0} {$n < $::N_HP} {incr n} {
     connect_bd_net [get_bd_ports HP${n}_ACLK] [get_bd_pins $ps7/S_AXI_HP${n}_ACLK]
     set_property CONFIG.ASSOCIATED_BUSIF S_AXI_HP$n [get_bd_ports HP${n}_ACLK]
 }
+
+# S_AXI_GP0 (32 bits) hacia el PL: memoria de ondas del OPL4 (wave_axi) a 37,5 MHz
+make_bd_intf_pins_external [get_bd_intf_pins $ps7/S_AXI_GP0]
+set_property name S_AXI_GP0 [get_bd_intf_ports S_AXI_GP0_0]
+create_bd_port -dir I -type clk -freq_hz 37500000 GP0_ACLK
+connect_bd_net [get_bd_ports GP0_ACLK] [get_bd_pins $ps7/S_AXI_GP0_ACLK]
+set_property CONFIG.ASSOCIATED_BUSIF S_AXI_GP0 [get_bd_ports GP0_ACLK]
+# S_AXI_GP1 (32 bits): puerto de depuracion 34-37h de la memoria de ondas (2a wave_axi) a clk_54m
+make_bd_intf_pins_external [get_bd_intf_pins $ps7/S_AXI_GP1]
+set_property name S_AXI_GP1 [get_bd_intf_ports S_AXI_GP1_0]
+create_bd_port -dir I -type clk -freq_hz 54000000 GP1_ACLK
+connect_bd_net [get_bd_ports GP1_ACLK] [get_bd_pins $ps7/S_AXI_GP1_ACLK]
+set_property CONFIG.ASSOCIATED_BUSIF S_AXI_GP1 [get_bd_ports GP1_ACLK]
+
+# GPIO EMIO (4 bits) -> OLED 128x64 del conector J4 (SSD1306 por SPI de 4 hilos, bit-bang
+# desde el ARM: arm/companion/oled.c). Banco 2 del GPIO del PS = EMIO, bits 0..3 = GPIO 54..57.
+make_bd_intf_pins_external [get_bd_intf_pins $ps7/GPIO_0]
+set_property name OLED_GPIO [get_bd_intf_ports GPIO_0_0]
 
 # Reloj y reset del PL: puertos explicitos
 create_bd_port -dir O -type clk FCLK_CLK0
