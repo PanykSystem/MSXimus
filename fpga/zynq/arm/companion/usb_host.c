@@ -148,9 +148,28 @@ void tuh_hid_mount_cb(uint8_t dev, uint8_t idx, const uint8_t *desc_report, uint
         int pl = hid_pad_mount(dev, idx, desc_report, desc_len);
         if (pl >= 0) { usb_n_pad++; log_str(" -> mando jugador "); log_dec((u32)pl + 1u); }
         else log_str(" (sin ejes ni botones, o ya hay 2 mandos)");
+        /* DualShock 4 y sus clones (054C:05C4/09CC): muchos no transmiten hasta que el host
+         * lee el informe de calibracion (feature 0x02, 37 B) */
+        if (pl >= 0) {
+            uint16_t vid = 0, pid = 0;
+            tuh_vid_pid_get(dev, &vid, &pid);
+            if (vid == 0x054Cu) {
+                static u8 ds4_feat[64];
+                log_str(" [DS4: pido feature 02]");
+                if (!tuh_hid_get_report(dev, idx, 0x02, HID_REPORT_TYPE_FEATURE, ds4_feat, 37)) log_str(" (fallo)");
+            }
+        }
     }
     log_str("\n");
     if (!tuh_hid_receive_report(dev, idx)) log_str("HID: no se pudo pedir el primer informe\n");
+}
+
+void tuh_hid_get_report_complete_cb(uint8_t dev, uint8_t idx, uint8_t report_id, uint8_t report_type, uint16_t len)
+{
+    (void)report_type;
+    log_str("HID "); log_dec(dev); log_str("/"); log_dec(idx); log_str(": feature "); log_hex(report_id);
+    log_str(" recibido, "); log_dec(len); log_str(" B\n");
+    tuh_hid_receive_report(dev, idx);                        /* por si el IN no estaba en vuelo */
 }
 
 void tuh_hid_umount_cb(uint8_t dev, uint8_t idx)
@@ -175,6 +194,84 @@ void tuh_hid_report_received_cb(uint8_t dev, uint8_t idx, const uint8_t *report,
         if (pl >= 0 && joy[pl] != w) { joy[pl] = w; mbox_misc_flush(); }
     }
     tuh_hid_receive_report(dev, idx);
+}
+
+/* ---------------- mandos XInput (Xbox y genericos con dongle: clase 0xFF, no HID) ----------------
+ * Driver de clase de Ryzee119/tusb_xinput (xinput/, MIT). TinyUSB pide los drivers extra
+ * con usbh_app_driver_get_cb. Misma palabra SNES que hid_pad.c; jugador = primer hueco. */
+#include "xinput_host.h"
+#define XI_TRACE 0                                           /* 1 = volcar el paquete crudo al anillo cada ~1 s */
+
+usbh_class_driver_t const *usbh_app_driver_get_cb(uint8_t *driver_count)
+{
+    *driver_count = 1;
+    return &usbh_xinput_driver;
+}
+
+static struct { u8 used, dev, inst; } xi[2];
+
+static u16 xinput_to_snes(const xinput_gamepad_t *p)
+{
+    u16 b = p->wButtons, w = 0;
+    if ((b & XINPUT_GAMEPAD_DPAD_UP)    || p->sThumbLY >  16000) w |= 1u << 4;
+    if ((b & XINPUT_GAMEPAD_DPAD_DOWN)  || p->sThumbLY < -16000) w |= 1u << 5;
+    if ((b & XINPUT_GAMEPAD_DPAD_LEFT)  || p->sThumbLX < -16000) w |= 1u << 6;
+    if ((b & XINPUT_GAMEPAD_DPAD_RIGHT) || p->sThumbLX >  16000) w |= 1u << 7;
+    if (b & XINPUT_GAMEPAD_A)              w |= 1u << 8;
+    if (b & XINPUT_GAMEPAD_B)              w |= 1u << 0;
+    if (b & XINPUT_GAMEPAD_X)              w |= 1u << 9;
+    if (b & XINPUT_GAMEPAD_Y)              w |= 1u << 1;
+    if (b & XINPUT_GAMEPAD_LEFT_SHOULDER)  w |= 1u << 10;
+    if (b & XINPUT_GAMEPAD_RIGHT_SHOULDER) w |= 1u << 11;
+    if (b & XINPUT_GAMEPAD_BACK)           w |= 1u << 2;
+    if (b & XINPUT_GAMEPAD_START)          w |= 1u << 3;
+    return w;
+}
+
+static int xi_find(u8 dev, u8 inst)
+{
+    for (int k = 0; k < 2; k++) if (xi[k].used && xi[k].dev == dev && xi[k].inst == inst) return k;
+    return -1;
+}
+
+void tuh_xinput_mount_cb(uint8_t dev, uint8_t inst, const xinputh_interface_t *itf)
+{
+    int k = -1;
+    for (int i = 0; i < 2; i++) if (!xi[i].used) { k = i; break; }
+    log_str("XInput "); log_dec(dev); log_str("/"); log_dec(inst); log_str(" tipo "); log_dec(itf->type);
+    if (k < 0) { log_str(": ya hay 2 mandos\n"); return; }
+    xi[k].used = 1; xi[k].dev = dev; xi[k].inst = inst;
+    usb_n_pad++;
+    log_str(" -> mando jugador "); log_dec((u32)k + 1u); log_str("\n");
+    tuh_xinput_set_led(dev, inst, (uint8_t)(k + 1), false);
+    tuh_xinput_receive_report(dev, inst);
+}
+
+void tuh_xinput_umount_cb(uint8_t dev, uint8_t inst)
+{
+    int k = xi_find(dev, inst);
+    if (k >= 0) { xi[k].used = 0; joy[k] = 0; mbox_misc_flush(); if (usb_n_pad) usb_n_pad--; }
+    log_str("XInput "); log_dec(dev); log_str("/"); log_dec(inst); log_str(" quitado\n");
+}
+
+void tuh_xinput_report_received_cb(uint8_t dev, uint8_t inst, xinputh_interface_t const *itf, uint16_t len)
+{
+    (void)len;
+    static u32 dbg_n;
+    int k = xi_find(dev, inst);
+    usb_stats_reports++;
+    if (k >= 0 && itf->connected && itf->new_pad_data) {
+        u16 w = xinput_to_snes(&itf->pad);
+        if (joy[k] != w) { joy[k] = w; mbox_misc_flush(); }
+    }
+    if (XI_TRACE && (++dbg_n % 500u) == 0u) {                /* traza de bring-up: estado crudo cada ~1 s */
+        log_str("XI con="); log_dec(itf->connected); log_str(" new="); log_dec(itf->new_pad_data);
+        log_str(" btn="); log_hex(itf->pad.wButtons); log_str(" LX="); log_dec((u32)(u16)itf->pad.sThumbLX);
+        log_str(" LY="); log_dec((u32)(u16)itf->pad.sThumbLY); log_str(" len="); log_dec(len); log_str(" raw=");
+        for (int i = 0; i < 12; i++) { log_hex(itf->epin_buf[i] | 0x100u); log_str(" "); }   /* 1xx = byte */
+        log_str("\n");
+    }
+    tuh_xinput_receive_report(dev, inst);
 }
 
 /* ---------------- API para main ---------------- */

@@ -13,8 +13,8 @@ TU=$(cd ../tinyusb && pwd)/src
 # -mno-unaligned-access: sin MMU toda la memoria es Strongly-Ordered y un acceso desalineado
 # es DATA ABORT (gcc fusionaba strb en strh/str sobre char[] y osd_render abortaba).
 CFLAGS="-mcpu=cortex-a9 -marm -mfloat-abi=soft -mno-unaligned-access -O2 -ffreestanding -fno-builtin -nostdlib -Wall -Wno-unused-function
-        -DCI_HS_ZYNQ7000 -Ibsp -I. -I$TU -I$STD/common -I$STD/arm/cortexa9 -I$STD/arm/common -I$STD/arm/common/gcc -I$SDPS"
-SRCS="start.S main.c log.c usb_host.c hid_pad.c osd.c bsp/support.c bsp/xsdps_g.c
+        -DCI_HS_ZYNQ7000 -Ibsp -I. -Ixinput -I$TU -I$STD/common -I$STD/arm/cortexa9 -I$STD/arm/common -I$STD/arm/common/gcc -I$SDPS"
+SRCS="start.S main.c log.c usb_host.c hid_pad.c osd.c xinput/xinput_host.c bsp/support.c bsp/xsdps_g.c
       $TU/tusb.c $TU/common/tusb_fifo.c $TU/host/usbh.c $TU/host/hub.c $TU/class/hid/hid_host.c
       $TU/portable/chipidea/ci_hs/hcd_ci_hs.c $TU/portable/ehci/ehci.c
       $SDPS/xsdps.c $SDPS/xsdps_options.c $SDPS/xsdps_sinit.c

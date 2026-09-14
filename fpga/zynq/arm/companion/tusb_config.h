@@ -21,10 +21,11 @@
 
 #define CFG_TUH_ENABLED           1
 #define CFG_TUH_MAX_SPEED         OPT_MODE_HIGH_SPEED
-#define CFG_TUH_ENUMERATION_BUFSIZE 256
+#define CFG_TUH_ENUMERATION_BUFSIZE 1024        /* el DualShock 4 (054C:09CC) trae un descriptor de informe de ~500 B */
 #define CFG_TUH_HUB               1
 #define CFG_TUH_DEVICE_MAX        (3 * CFG_TUH_HUB + 1)
 #define CFG_TUH_HID               (3 * CFG_TUH_DEVICE_MAX)
+#define CFG_TUH_XINPUT            2                 /* mandos XInput (Xbox/genericos con dongle): driver xinput/ */
 #define CFG_TUH_HID_EPIN_BUFSIZE  64
 #define CFG_TUH_HID_EPOUT_BUFSIZE 64
 #define CFG_TUH_CDC               0
