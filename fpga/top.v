@@ -2759,17 +2759,6 @@ assign wv3_wdata = 8'd0;
 `endif
 `endif
 
-// V3.6d: cpu_run REGISTRADO. El termino de abajo junta seis senales de clk_54m
-// y entraba directo al RESET del contador rfsh_gap de memory_ctrl, que vive en
-// clk_108m: un camino 54 -> 108 MHz que en la campana v36c salio a 0,913 ns en el
-// dado entregado y a 0,039 ns en otro. Con este FF el camino empieza registrado.
-// El ciclo de retraso es inocuo en los dos sentidos: cuando la DMA deja de permitir
-// el refresco, sd_dma todavia espera 40 ciclos (S_GUARD) antes del primer byte del
-// bloque; y permitirlo un ciclo mas tarde solo lo hace mas conservador.
-reg cpu_run_r = 1'b0;
-always @(posedge clk_54m)
-    cpu_run_r <= bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok;
-
 memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     .clk_27m(clk_54m),
     .clk_108m(clk_108m),
@@ -2789,7 +2778,7 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     // puede disparar cuando el Z80 esta provadamente parado (ver memory.v)
     // V3.6: con la DMA, el refresco autonomo SOLO en sus ventanas de espera (dma_rfsh_ok),
     // nunca durante la rafaga de escrituras (memory.v _175/_181: pisaria una aceptacion)
-    .cpu_run(cpu_run_r),
+    .cpu_run(bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok),
 
     .ram_dout(ram_dout),
     .vram_dout(VrmDbi2),
