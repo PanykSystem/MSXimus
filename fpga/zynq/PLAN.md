@@ -207,6 +207,15 @@ Los 4 × USB del PL ya no hacen falta (el USB es el P3 del PS).
      configure. BOOT switch SW1: ON‑ON = JTAG, ON‑OFF = QSPI, OFF‑OFF = SD (a confirmar).
    - OLED 0,96" (J4, E18/E19/F16/F17): sin usar; candidata a mostrar temperatura/estado
      con un maestro I2C/SPI en el PL alimentado por el buzón (futuro).
+   🏆🏆 14/09 18:25 **ARRANQUE AUTÓNOMO DESDE LA SD VALIDADO**: microSD FAT32 con `BOOT.bin`
+   en TF1, SW1 en OFF‑OFF (= SD; el FSBL lo confirma, BOOT_MODE reg = 5), sin PC: logo y menú
+   por HDMI, el companion arrancado por el FSBL sirve la tarjeta de TF2 (8 lecturas del
+   premontaje), USB host vivo. Dos reglas del FSBL cazadas por la consola del P1: el bitstream
+   va justo detrás del bootloader ("Partition order invalid" si no) y la dirección de salto es
+   la de la PRIMERA partición PS (`image_mover.c`) → orden final fsbl · bit · companion ·
+   zeros · pack. La consola del CH340 cambia de COM al apagar la placa: para ver el log sin
+   ciclo de alimentación, relanzar el FSBL por JTAG (`dow fsbl.elf; con`) con el COM abierto.
+   🌡️ Con el disipador puesto: die a **55 °C** (80 °C sin él).
 4b. 🔨 14/09 12:30 **USB HOST en el ARM** (teclado, ratón y mandos por el USB‑C P3, con hub):
    `arm/companion/` = sdproxy + TinyUSB (clon en `arm/tinyusb/`, master 7b787da; `hcd_ci_hs.c`
    parcheado con `#elif defined(CI_HS_ZYNQ7000)` → `ci_hs_zynq.h`) sobre el USB0 del PS

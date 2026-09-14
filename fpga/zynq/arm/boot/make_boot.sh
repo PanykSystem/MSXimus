@@ -1,11 +1,15 @@
 #!/bin/bash
 # make_boot.sh — BOOT.bin del MSXimus para la ZYNQ MINI (arranque autonomo desde la SD de
-# TF1/SD0 o, mas adelante, desde la QSPI). Orden de carga del FSBL (= orden del .bif):
+# TF1/SD0 o, mas adelante, desde la QSPI). Orden de carga del FSBL (= orden del .bif; el FSBL
+# de Xilinx EXIGE el bitstream justo despues del bootloader, "Partition order invalid" si no):
 #   1) fsbl.elf            (bootloader: ps7_init + DDR)
-#   2) zeros.bin           -> DDR 0x1FF00000: buzon + SDBOX a cero (MSX_RUN = 0: el MSX espera)
-#   3) pack.bin            -> DDR 0x10F00000: pack de BIOS (lo mismo que hace boot.tcl por JTAG)
-#   4) msximus_zynq.bit    (el PL arranca con el MSX en reset hasta MSX_RUN)
-#   5) companion.elf       (proxy de SD + USB + OSD; pone MSX_RUN cuando la tarjeta esta lista)
+#   2) msximus_zynq.bit    (el PL arranca; MSX_RUN lo lee de la DDR: basura unos ms, luego 0)
+#   3) companion.elf       (proxy de SD + USB + OSD; pone MSX_RUN cuando la tarjeta esta lista).
+#                          TIENE que ser la PRIMERA particion PS: el FSBL toma la direccion de
+#                          arranque de la primera que ve ("first PS partition", image_mover.c)
+#   4) zeros.bin           -> DDR 0x1FF00000: buzon + SDBOX a cero (MSX_RUN = 0: el MSX espera)
+#   5) pack.bin            -> DDR 0x10F00000: pack de BIOS (lo mismo que hace boot.tcl por JTAG)
+#   (el FSBL carga TODAS las particiones y despues salta al companion)
 # Uso: make_boot.sh [pack.bin]   -> BOOT.bin en este directorio. Copiarlo a la raiz de una SD
 # FAT32 y meterla en TF1 con el BOOT switch en SD.
 set -e
@@ -21,10 +25,10 @@ cat > boot.bif <<EOF
 the_ROM_image:
 {
     [bootloader] ../fsbl/fsbl.elf
-    [load=0x1FF00000] zeros.bin
-    [load=0x10F00000] pack.bin
     $BIT
     ../companion/companion.elf
+    [load=0x1FF00000] zeros.bin
+    [load=0x10F00000] pack.bin
 }
 EOF
 "/d/Xilinx/Vivado/2019.2/bin/bootgen.bat" -arch zynq -image boot.bif -o BOOT.bin -w on
