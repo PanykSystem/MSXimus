@@ -1,3 +1,8 @@
+// ======================================================================
+//  top_zynq.v — GENERADO por zynq/tools/make_top_zynq.py a partir de top.v
+//  NO EDITAR A MANO: los cambios van al script (o a top.v si son comunes).
+// ======================================================================
+`define ZYNQ                 // ZYNQ MINI (XC7Z020): ver zynq/PLAN.md
 `define ENABLE_V9958
 `define ENABLE_BIOS
 `define ENABLE_SOUND //v9958, bios required
@@ -23,19 +28,19 @@
 `define ENABLE_Y8950_ADPCM  // F2 (_80): ADPCM-B del Y8950 — y8950_adpcm.v (glue openMSX-exacto) + decoder jt10_adpcmb + RAM samples 32KB BSRAM (NMS-1205 de serie). VALIDADO HW+VGMPlay
 `define ENABLE_Y8950_IRQ    // F2 (_81): IRQ del Y8950 (timers+EOS+BUF ya enmascarados) al /INT del Z80 (wired-AND como el Music Module real). Arranca todo enmascarado = sin IRQ hasta que el software la pida
 `define ENABLE_OPL4FM       // F2 (_82-_85): MoonSound FM (OPL3) en C4-C7 + stub wave 7E/7F. VALIDADO EN HW (reloj 96/98, limpio)
-`define ENABLE_WAVE_DDR3    // F2 (_86): bring-up de la DDR3 del SOM para la memoria de ondas OPL4 (cliente independiente + puerto debug I/O 34-37h). Fase wavetable
-`define ENABLE_WAVE_LOADER  // F2 (_87): carga de la YRW801 (2MB) de flash 0x500000 a DDR3 en BACKGROUND tras el boot (no bloquea el arranque). Status: bit2 de IN 36h = cargando
-`define ENABLE_OPL4_WAVE    // F2 (_89): motor PCM 24 slots del OPL4 (YMF278B.sv de srg320 + permiso) en clk_x1 de la DDR3, CE fraccionario 44.1kHz con stall. REQUIERE ENABLE_WAVE_DDR3+LOADER. Con esto el MoonSound esta COMPLETO (FM+wavetable)
+//`define ENABLE_WAVE_DDR3    // F2 (_86): bring-up de la DDR3 del SOM para la memoria de ondas OPL4 (cliente independiente + puerto debug I/O 34-37h). Fase wavetable
+//`define ENABLE_WAVE_LOADER  // F2 (_87): carga de la YRW801 (2MB) de flash 0x500000 a DDR3 en BACKGROUND tras el boot (no bloquea el arranque). Status: bit2 de IN 36h = cargando
+//`define ENABLE_OPL4_WAVE    // F2 (_89): motor PCM 24 slots del OPL4 (YMF278B.sv de srg320 + permiso) en clk_x1 de la DDR3, CE fraccionario 44.1kHz con stall. REQUIERE ENABLE_WAVE_DDR3+LOADER. Con esto el MoonSound esta COMPLETO (FM+wavetable)
 `define ENABLE_USB_KBD      // F3 (_39): teclado por USB-A DIRECTO al fabric (usb_hid_host, sin hub)
 `define ENABLE_SCC          // F3 (_40): SCC de vuelta — scc_wave2v Verilog puro (el VHDL scc_wave_mul era BARRIDO por la sintesis GW5A)
 `define ENABLE_TURBO       // P1: turbo WSX 5.37 de vuelta con la receta v1.9 (turbo_eff sin glitch + boot-turbo solo en frio)
-// ¡OJO! ENABLE_V9968_VDP y ENABLE_VRAM_DDR3 se ven comentados AQUI y aun
+// ¡OJO! ENABLE_V9968_VDP y ENABLE_VRAM_AXI se ven comentados AQUI y aun
 // asi ESTAN ACTIVOS en las entregas: tools/lanzar_campana.ps1 los descomenta
 // en el CLON antes de sintetizar (y aborta si no lo consigue). O sea que
 // leer este fichero a secas te dice lo que NO lleva el bitstream. Para saber
 // que hay de verdad en un .fs, mira el script de campana, no estas lineas.
-//`define ENABLE_V9968_VDP   // F1 V9968: VDP de HRA! (fpga/v9968, tag+eco) + shim VRAM a SDRAM compartida (puerto wv2) + puente 800px (msx2hdmi_v9968). Sustituye v9958_top ENTERO. Activar en el build _117
-//`define ENABLE_VRAM_DDR3   // _128X EXPERIMENTO: la VRAM del V9968 en la DDR3 del SOM (v9968_ddr3_backend; requiere ENABLE_V9968_VDP y USE_VRAM_DDR3=1 en build.tcl). ADVERTENCIA: DDR3 analogicamente marginal en esta placa (saga _94-_103)
+`define ENABLE_V9968_VDP   // F1 V9968: VDP de HRA! (fpga/v9968, tag+eco) + shim VRAM a SDRAM compartida (puerto wv2) + puente 800px (msx2hdmi_v9968). Sustituye v9958_top ENTERO. Activar en el build _117
+`define ENABLE_VRAM_AXI   // Zynq: v9968_axi_backend (HP0). Era ENABLE_VRAM_AXI   // _128X EXPERIMENTO: la VRAM del V9968 en la DDR3 del SOM (v9968_ddr3_backend; requiere ENABLE_V9968_VDP y USE_VRAM_DDR3=1 en build.tcl). ADVERTENCIA: DDR3 analogicamente marginal en esta placa (saga _94-_103)
 //`define TURBO_SIN_GUARDA_SDRAM  // 🧪 EXPERIMENTO 26/08 — **PROBADO Y DESCARTADO**: sin la guarda el MSX SE CUELGA al poner el turbo (placa, 26/08). La guarda NO estaba obsoleta pese a que la VRAM se mudo a la DDR3: lo que la justifica no es la CONTENCION del VDP sino la LATENCIA de la SDRAM (y su refresco), que a 5,37 no cabe en un T-estado de 186 ns. Se deja el define por si algun dia se acelera el controlador. Coste medido de la guarda: 18% (4,41 de 5,37).
 `define ENABLE_TURBOR_ID   // V3.1: S1990 del turboR (E4h-E7h) — la maquina se identifica como turboR y CHGCPU mueve el turbo. NO hay R800: ver fpga/src/msx_s1990.v
 `define ENABLE_IOSYS       // V3.1 PELDANO 1 (TangCore): iosys_bl616 + textdisp por la UART del BL616 (V14/U15) y overlay sobre el HDMI. Sin firmware en el MCU todavia: el overlay se enciende solo unos segundos al arrancar para demostrar la cadena y luego se aparta.
@@ -53,149 +58,153 @@
  `ifndef ENABLE_V9968_VDP
   `define ENABLE_ADPCM_SDRAM
  `else
-  `ifdef ENABLE_VRAM_DDR3
-   `define ENABLE_ADPCM_SDRAM
+  `ifdef ENABLE_VRAM_AXI
+   //`define ENABLE_ADPCM_SDRAM   // Zynq: ADPCM en BRAM (FALLBACK_BSRAM=1)
   `endif
  `endif
 `endif
 
-module top
+module top_zynq
 #(
-    parameter SD_SLOT = 3
+    parameter SD_SLOT = 3             // (como el Tang: slot de la microSD)
 )(
-    input wire ex_clk_27m,  // Console 60K: 50 MHz (pin V22); el nombre se conserva del TN20K
-    input wire s1,
-    input wire s2,
+    // ---- ZYNQ MINI: pines dedicados ----
+    input  wire        clk50,          // K17, 50 MHz (el "ex_clk_27m" del Tang)
+    input  wire        key_s1_n,       // M19 (K2)
+    input  wire        key_s2_n,       // M20 (K3)
+    output wire [3:0]  led_z,          // W13 V12 U12 T12 (activos a 1)
 
-    // --- STANDALONE MERGE: MSX bus ports removed; replaced by USB (BL616) + LED ---
-    // The old external MSX bus signals (ex_bus_wait_n/int_n/reset_n/clk_3m6,
-    // ex_bus_data, ex_msel, ex_bus_m1_n/rfsh_n/mreq_n/iorq_n/rd_n/wr_n,
-    // ex_bus_data_reverse_n, ex_bus_mp) are now INTERNAL wires/tie-offs (see below).
+    // HDMI (mismos nombres que el Tang: data_p/n, clk_p/n; H16/D19/C20/B19)
+    output wire [2:0]  data_p,
+    output wire [2:0]  data_n,
+    output wire        clk_p,
+    output wire        clk_n,
+    output wire        hdmi_out_en,    // H18
 
-    // SPI to on-board BL616 (FPGA Companion) - USB KEYBOARD and gamepads
-    // (Console 60K: puertos m0s del dock M0S eliminados; companion BL616 onboard)
-    input  wire spi_sclk,
-    input  wire spi_csn,
-    output wire spi_dir,
-    input  wire spi_dat,
-    output wire spi_irqn,
-    // _153: WiFi por ESP32-C6 externo (Waveshare C6-LCD-1.3, fw ESP32-UNAPI-
-    // Firmware rama msxnano, 859372 bps) en el CONECTOR J10 (el 2x20 libre,
-    // "SDRAM1 CONN." del esquematico oficial 32001C; el modulo SDRAM del core
-    // va en el otro). Peticion de Albert (v2, foto de la placa): los pines en
-    // FILA UNICA para cable plano de una hilera -> COLUMNA PAR, pines 12-14-16
-    // consecutivos: GND(12) TX(14=W21) RX(16=N17). El +5V (pin 11) queda en la
-    // columna impar, asi que el C6 se alimenta por su USB-C.
-    // esp_rx_i PULL_UP = idle UART correcto sin modulo pinchado.
-    // ⚠ Si algun dia se pincha un 2o modulo SDRAM en J10, esto se muda.
-    input  wire esp_rx_i,    // N17 = J10 pin 16 (SDRAM1_D10) <- IO16 (TX) del C6
-    output wire esp_tx_o,    // W21 = J10 pin 14 (SDRAM1_D12) -> IO17 (RX) del C6
-    // _156: indicador de TURBO en la pantalla del C6 (mismo esquema que el
-    // nano: turbo_status pin 29 -> GPIO3, Display.ino TURBO_PIN con pulldown).
-    // J10 pin 18 = el siguiente par del bloque => cable plano de 4 seguidos:
-    // 12=GND 14=TX 16=RX 18=TURBO. Cablear al GPIO3 del C6. Peticion de Albert.
-    output wire esp_turbo_o, // N13 = J10 pin 18 (SDRAM1_D8) -> GPIO3 del C6
-    // Console 60K, mecánica JTAG→SPI (estilo C64Nano): jtagseln (NET_LOC
-    // V_JTAGSELN) entrega los pines JTAG al fabric cuando vale 1; el BL616
-    // reclama JTAG subiendo bl616_jtagsel (PULL_UP: sin firmware companion la
-    // placa queda en modo JTAG = siempre reprogramable).
-    input  wire bl616_jtagsel,
-    output wire jtagseln,
-    // V3.1 (TangCore): TX del enlace con el BL616. U15 = GPIO27 RX del MCU, y
-    // quedo LIBRE cuando el companion SPI se mudo al J10 (spi_irqn -> AB22).
-    // El RX no necesita pad nuevo: bl616_jtagsel YA ES el V14 = GPIO28 TX.
-    output wire iosys_uart_tx,
+    // microSD del MSXimus (sd_reader del PL, modo SD 1 bit). La placa NO tiene
+    // microSD en el PL (TF1/TF2 son SD0/SD1 del PS por MIO): breakout pasivo 3V3
+    // en el header CAM1, pines 31..36 (GND en 37/38, 3V3 en 39/40). PLAN.md D.
+    output wire        sd_sclk,        // N18 (CAM1-34)
+    inout  wire        sd_cmd,         // T20 (CAM1-33)
+    inout  wire        sd_dat0,        // P20 (CAM1-35)
+    output wire        sd_dat1,        // N20 (CAM1-36)
+    output wire        sd_dat2,        // U20 (CAM1-31)
+    output wire        sd_dat3,        // P18 (CAM1-32)
 
-    // discrete status LEDs (active low)
-    output wire [5:0] led,
-    output wire ws2812_led,   // external WS2812B status strip (case)
-
-    // ---- DEBUG BRING-UP 60K: "electrocardiograma" por los dos PMODs ----
-    //  (se retirará al terminar el bring-up; pines de C64Nano, LVCMOS33)
-    //  PMOD1 io[0..5]=W19,W20,F19,F20,E22,D22 · PMOD0=V19,V18,G22,G21,E18
-    output wire [4:0] dbg_pmod1,   // (D22/bit5 liberado para uart_pmod_rx)
-    output wire [4:0] dbg_pmod0,
-    input  wire uart_pmod_rx,      // PMOD1 D22: RX del WiFi en modo WIFI_PMOD_TEST (PC-de-ESP)
-
-    //hdmi out
-    output wire [2:0] data_p,
-    output wire [2:0] data_n,
-    output wire clk_p,
-    output wire clk_n,
-
-    // flash
-    output wire mspi_cs,
-    output wire mspi_sclk,
-    inout wire mspi_miso,
-    inout wire mspi_mosi,
-    // Console 60K: la flash va cableada QSPI (W25Q64) — /WP y /HOLD deben ir a
-    // nivel alto o la flash puede bloquearse/pausarse con los pines flotando.
-    output wire mspi_wp,
-    output wire mspi_hold,
-
-    // MicroSD
-    output wire sd_sclk,
-    inout wire sd_cmd,      // MOSI
-    inout  wire sd_dat0,     // MISO
-    output wire sd_dat1,     // 1
-    output wire sd_dat2,     // 1
-    output wire sd_dat3,     // 1
-
-    // F1 (_73): los puertos uart_tx/uart_rx del ESP-01S (nano) NO existen en el
-    // 60K — la UART del WiFi va al BL616 ONBOARD por los pads ya constreñidos
-    // bl616_jtagsel (V14 = GPIO28 TX del BL616) y spi_irqn (U15 = GPIO27 RX).
-
-    //usb uart
-    output wire usb_uart_tx,
-
-`ifdef ENABLE_USB_KBD
-    // F3 (_39): los 2 USB-A de la Console 60K van DIRECTOS al fabric
-    // (H13/G13, M15/M16 — verificado en los .cst de TangCore; el esquematico
-    // de Sipeed esta mal). Soft-host low-speed 1.5Mbps por puerto.
-    inout wire usb1_dp,
-    inout wire usb1_dn,
-    inout wire usb2_dp,
-    inout wire usb2_dn,
-`endif
-
-    // Magic ports for SDRAM to be inferred
-    output wire O_sdram_clk,
-    output wire O_sdram_cke,
-    output wire O_sdram_cs_n, // chip select
-    output wire O_sdram_cas_n, // columns address select
-    output wire O_sdram_ras_n, // row address select
-    output wire O_sdram_wen_n, // write enable
-    inout wire [15:0] IO_sdram_dq, // 16 bit bidirectional data bus (Console 60K: SDR externa W9825G6KH)
-    output wire [12:0] O_sdram_addr, // 13 bit multiplexed address bus
-    output wire [1:0] O_sdram_ba, // two banks
-    output wire [1:0] O_sdram_dqm, // 16/2
-
-    // ---- _86: DDR3 del SOM (memoria de ondas OPL4; cliente independiente,
-    //      la SDRAM/memory.v NO se toca). Pines del ddr3_framebuffer_gowin.
-    output wire [14:0] ddr_addr,
-    output wire [2:0]  ddr_bank,
-    output wire        ddr_cs,
-    output wire        ddr_ras,
-    output wire        ddr_cas,
-    output wire        ddr_we,
-    output wire        ddr_ck,
-    output wire        ddr_ck_n,
-    output wire        ddr_cke,
-    output wire        ddr_odt,
-    output wire        ddr_reset_n,
-    output wire [1:0]  ddr_dm,
-    inout  wire [15:0] ddr_dq,
-    inout  wire [1:0]  ddr_dqs,
-    inout  wire [1:0]  ddr_dqs_n,
-
-    // Ventilador de la Console 60K (FAN_EN, pin AB12 Bank9 1.5V): la placa
-    // conmuta los 5V del conector SH1.0 con 1 = ON. Gobernado por fan_ctrl
-    // (termometro de anillo de latches, ver fan_ctrl.v / ro_osc.v).
-    output wire        fan_en_o
-
-    //output wire SLTSL3
-
+    // ---- PS7: DDR3 + MIO (pines fijos del PS, sin .xdc) ----
+    inout  wire [14:0] DDR_addr,
+    inout  wire [2:0]  DDR_ba,
+    inout  wire        DDR_cas_n,
+    inout  wire        DDR_ck_n,
+    inout  wire        DDR_ck_p,
+    inout  wire        DDR_cke,
+    inout  wire        DDR_cs_n,
+    inout  wire [1:0]  DDR_dm,
+    inout  wire [15:0] DDR_dq,
+    inout  wire [1:0]  DDR_dqs_n,
+    inout  wire [1:0]  DDR_dqs_p,
+    inout  wire        DDR_odt,
+    inout  wire        DDR_ras_n,
+    inout  wire        DDR_reset_n,
+    inout  wire        DDR_we_n,
+    inout  wire        FIXED_IO_ddr_vrn,
+    inout  wire        FIXED_IO_ddr_vrp,
+    inout  wire [53:0] FIXED_IO_mio,
+    inout  wire        FIXED_IO_ps_clk,
+    inout  wire        FIXED_IO_ps_porb,
+    inout  wire        FIXED_IO_ps_srstb
 );
+    // ================================================================
+    //  ZYNQ: los puertos del Tang que aqui no existen pasan a wires
+    //  internos con tie-off. La logica que los consume NO se toca:
+    //  Vivado la poda. Cuando un subsistema se conecte de verdad
+    //  (USB al header, SD1, ESP32, UART del PS por EMIO) su wire se
+    //  sustituye por el puerto real y su .xdc.
+    // ================================================================
+    wire ex_clk_27m = clk50;          // nombre historico (lleva 50 MHz tambien en el Tang)
+    wire s1 = key_s1_n;
+    wire s2 = key_s2_n;
+    assign hdmi_out_en = 1'b1;
+
+    // BL616 (SPI companion + UART iosys + JTAG select): no existe en la Zynq
+    wire spi_sclk = 1'b0, spi_csn = 1'b1, spi_dat = 1'b0;
+    wire spi_dir, spi_irqn;
+    wire bl616_jtagsel;               // = RX de la UART del iosys <- UART0 del PS (EMIO): el ARM hace de BL616
+    wire jtagseln, iosys_uart_tx;     // iosys_uart_tx -> UART0_RX del PS
+    // ESP32-C6 (WiFi): pendiente de 3 pines del header (PLAN.md D)
+    wire esp_rx_i = 1'b1;
+    wire esp_tx_o, esp_turbo_o;
+    // LEDs del Tang (6, activos a 0) -> 4 de la placa (activos a 1)
+    wire [5:0] led;
+    assign led_z = ~led[3:0];
+    wire ws2812_led;
+    wire [4:0] dbg_pmod1, dbg_pmod0;  // (el ILA sustituye a los PMOD)
+    wire uart_pmod_rx = 1'b1;
+    // Flash SPI del Tang: el pack lo carga el PS en la DDR (cargador a IDLE)
+    wire mspi_cs, mspi_sclk, mspi_wp, mspi_hold;
+    wire mspi_miso, mspi_mosi;
+    // (microSD: puertos reales sd_* en el header, ver cabecera)
+    wire usb_uart_tx;
+    // USB-A x2 (soft-host en el PL): pendiente de 4 pines del header
+    wire usb1_dp, usb1_dn, usb2_dp, usb2_dn;
+    // SDRAM y DDR3 del Tang: no existen (memory_axi / v9968_axi_backend)
+    wire O_sdram_clk, O_sdram_cke, O_sdram_cs_n, O_sdram_cas_n, O_sdram_ras_n, O_sdram_wen_n;
+    wire [15:0] IO_sdram_dq;
+    wire [12:0] O_sdram_addr;
+    wire [1:0]  O_sdram_ba, O_sdram_dqm;
+    wire [14:0] ddr_addr;
+    wire [2:0]  ddr_bank;
+    wire ddr_cs, ddr_ras, ddr_cas, ddr_we, ddr_ck, ddr_ck_n, ddr_cke, ddr_odt, ddr_reset_n;
+    wire [1:0]  ddr_dm;
+    wire [15:0] ddr_dq;
+    wire [1:0]  ddr_dqs, ddr_dqs_n;
+    wire fan_en_o;
+
+    // ---- PS7: relojes/reset y los dos puertos HP (instancia al final) ----
+    wire        fclk0;                // 150 MHz: aclk de la VRAM
+    wire        frst0_n;              // FCLK_RESET0_N (lo suelta ps7_post_config)
+    wire [5:0]  hp0_awid;   wire [31:0] hp0_awaddr;  wire [3:0] hp0_awlen;   wire [2:0] hp0_awsize;
+    wire [1:0]  hp0_awburst, hp0_awlock; wire [3:0] hp0_awcache; wire [2:0] hp0_awprot; wire [3:0] hp0_awqos;
+    wire        hp0_awvalid, hp0_awready;
+    wire [5:0]  hp0_wid;    wire [63:0] hp0_wdata;   wire [7:0] hp0_wstrb;  wire hp0_wlast, hp0_wvalid, hp0_wready;
+    wire [5:0]  hp0_bid;    wire [1:0]  hp0_bresp;   wire hp0_bvalid, hp0_bready;
+    wire [5:0]  hp0_arid;   wire [31:0] hp0_araddr;  wire [3:0] hp0_arlen;   wire [2:0] hp0_arsize;
+    wire [1:0]  hp0_arburst, hp0_arlock; wire [3:0] hp0_arcache; wire [2:0] hp0_arprot; wire [3:0] hp0_arqos;
+    wire        hp0_arvalid, hp0_arready;
+    wire [5:0]  hp0_rid;    wire [63:0] hp0_rdata;   wire [1:0] hp0_rresp;  wire hp0_rlast, hp0_rvalid, hp0_rready;
+    wire [5:0]  hp1_awid;   wire [31:0] hp1_awaddr;  wire [3:0] hp1_awlen;   wire [2:0] hp1_awsize;
+    wire [1:0]  hp1_awburst, hp1_awlock; wire [3:0] hp1_awcache; wire [2:0] hp1_awprot; wire [3:0] hp1_awqos;
+    wire        hp1_awvalid, hp1_awready;
+    wire [5:0]  hp1_wid;    wire [63:0] hp1_wdata;   wire [7:0] hp1_wstrb;  wire hp1_wlast, hp1_wvalid, hp1_wready;
+    wire [5:0]  hp1_bid;    wire [1:0]  hp1_bresp;   wire hp1_bvalid, hp1_bready;
+    wire [5:0]  hp1_arid;   wire [31:0] hp1_araddr;  wire [3:0] hp1_arlen;   wire [2:0] hp1_arsize;
+    wire [1:0]  hp1_arburst, hp1_arlock; wire [3:0] hp1_arcache; wire [2:0] hp1_arprot; wire [3:0] hp1_arqos;
+    wire        hp1_arvalid, hp1_arready;
+    wire [5:0]  hp1_rid;    wire [63:0] hp1_rdata;   wire [1:0] hp1_rresp;  wire hp1_rlast, hp1_rvalid, hp1_rready;
+    // HP2 = buzon de depuracion (zynq/dbg_mailbox_axi.v): teclado desde xsdb + telemetria
+    wire [5:0]  hp2_awid;   wire [31:0] hp2_awaddr;  wire [3:0] hp2_awlen;   wire [2:0] hp2_awsize;
+    wire [1:0]  hp2_awburst, hp2_awlock; wire [3:0] hp2_awcache; wire [2:0] hp2_awprot; wire [3:0] hp2_awqos;
+    wire        hp2_awvalid, hp2_awready;
+    wire [5:0]  hp2_wid;    wire [63:0] hp2_wdata;   wire [7:0] hp2_wstrb;  wire hp2_wlast, hp2_wvalid, hp2_wready;
+    wire [5:0]  hp2_bid;    wire [1:0]  hp2_bresp;   wire hp2_bvalid, hp2_bready;
+    wire [5:0]  hp2_arid;   wire [31:0] hp2_araddr;  wire [3:0] hp2_arlen;   wire [2:0] hp2_arsize;
+    wire [1:0]  hp2_arburst, hp2_arlock; wire [3:0] hp2_arcache; wire [2:0] hp2_arprot; wire [3:0] hp2_arqos;
+    wire        hp2_arvalid, hp2_arready;
+    wire [5:0]  hp2_rid;    wire [63:0] hp2_rdata;   wire [1:0] hp2_rresp;  wire hp2_rlast, hp2_rvalid, hp2_rready;
+    wire [127:0] kbd_mbox;            // bitmap HID leido del buzon (dominio clk_54m)
+    wire [15:0] joy1_mbox, joy2_mbox; // joysticks USB del companion (formato SNES del BL616), clk_54m
+    wire [7:0]  mb_mouse_btn, mb_mouse_dx, mb_mouse_dy;   // raton USB del companion: delta por informe
+    wire        mb_mouse_rep;         // pulso clk_54m: nuevo informe de raton
+    // HP3 = proxy de sectores "SD" (zynq/sd_axi_proxy.v) a clk_27m
+    wire [5:0]  hp3_awid;   wire [31:0] hp3_awaddr;  wire [3:0] hp3_awlen;   wire [2:0] hp3_awsize;
+    wire [1:0]  hp3_awburst, hp3_awlock; wire [3:0] hp3_awcache; wire [2:0] hp3_awprot; wire [3:0] hp3_awqos;
+    wire        hp3_awvalid, hp3_awready;
+    wire [5:0]  hp3_wid;    wire [63:0] hp3_wdata;   wire [7:0] hp3_wstrb;  wire hp3_wlast, hp3_wvalid, hp3_wready;
+    wire [5:0]  hp3_bid;    wire [1:0]  hp3_bresp;   wire hp3_bvalid, hp3_bready;
+    wire [5:0]  hp3_arid;   wire [31:0] hp3_araddr;  wire [3:0] hp3_arlen;   wire [2:0] hp3_arsize;
+    wire [1:0]  hp3_arburst, hp3_arlock; wire [3:0] hp3_arcache; wire [2:0] hp3_arprot; wire [3:0] hp3_arqos;
+    wire        hp3_arvalid, hp3_arready;
+    wire [5:0]  hp3_rid;    wire [63:0] hp3_rdata;   wire [1:0] hp3_rresp;  wire hp3_rlast, hp3_rvalid, hp3_rready;
 
 // ============================================================================
 // GUARDAS de la matriz ENABLE_* (niquelado B, bug #22 del informe): las
@@ -219,9 +228,9 @@ module top
     ERROR_ENABLE_WAVE_LOADER_requiere_ENABLE_WAVE_DDR3 u_guarda_def4();
  `endif
 `endif
-`ifdef ENABLE_VRAM_DDR3
+`ifdef ENABLE_VRAM_AXI
  `ifndef ENABLE_V9968_VDP
-    ERROR_ENABLE_VRAM_DDR3_requiere_ENABLE_V9968_VDP u_guarda_def5();
+    ERROR_ENABLE_VRAM_AXI_requiere_ENABLE_V9968_VDP u_guarda_def5();
  `endif
 `endif
 // Stubs para builds SIN estos subsistemas (nets que el resto del top consume
@@ -286,19 +295,30 @@ end
     wire clk_135;               // TMDS x5 del HDMI (mismo VCO: 135 = 5 x 27 exacto)
     wire clk_wave375; // _104: 37.5 MHz del PLLA (motor OPL4) — declarado ANTES
                       // de su primer uso (leccion Gowin de los implicitos)
-    Gowin_PLL pll_main (
-        .clkin  (ex_clk_27m),   // ⚠ en la Console 60K este pin lleva 50 MHz (V22)
-        .clkout0(clk_108m),     // 108.000000 MHz (fraccional, exacto)
-        .clkout1(clk_54m),      //  54.000000 MHz
-        .clkout2(clk_27m),      // v3.0: 27M del PLLA (fase CONOCIDA vs 54/108, como el
-                                //  rPLL del TN20K). Ya NO alimenta ningun OSER10 (el
-                                //  TMDS vive a 74.25/371.25 en pll_74) -> la restriccion
-                                //  que motivo el CLKDIV desaparece con el video 720p.
-        .clkout3(clk_135),      // 135.000000 MHz (TMDS; sustituye al CLK_135 del tn_vdp)
-        .clkout4(clk_wave375),  // _104: 37.500 MHz (motor OPL4 wave; VCO/36, fase t=0)
-        .lock   (clock_locked),
-        .mdclk  (ex_clk_27m)    // reloj de init del PLLA (secuencia mDRP)
+    // ---- ZYNQ MMCM_A: 50 x 27 = VCO 1350 (el mismo VCO que el PLLA del Tang) ----
+    wire mA_fb, mA_fb_b, mA_108, mA_54, mA_27, mA_135, mA_375;
+    MMCME2_BASE #(
+        .BANDWIDTH("OPTIMIZED"), .CLKIN1_PERIOD(20.000), .DIVCLK_DIVIDE(1),
+        .CLKFBOUT_MULT_F(27.000), .CLKFBOUT_PHASE(0.0),
+        .CLKOUT0_DIVIDE_F(12.500), .CLKOUT0_DUTY_CYCLE(0.5), .CLKOUT0_PHASE(0.0),   // 108
+        .CLKOUT1_DIVIDE(25),       .CLKOUT1_DUTY_CYCLE(0.5), .CLKOUT1_PHASE(0.0),   //  54
+        .CLKOUT2_DIVIDE(50),       .CLKOUT2_DUTY_CYCLE(0.5), .CLKOUT2_PHASE(0.0),   //  27
+        .CLKOUT3_DIVIDE(10),       .CLKOUT3_DUTY_CYCLE(0.5), .CLKOUT3_PHASE(0.0),   // 135
+        .CLKOUT4_DIVIDE(36),       .CLKOUT4_DUTY_CYCLE(0.5), .CLKOUT4_PHASE(0.0),   //  37.5
+        .REF_JITTER1(0.010), .STARTUP_WAIT("FALSE")
+    ) pll_main (
+        .CLKIN1(ex_clk_27m), .CLKFBIN(mA_fb_b), .CLKFBOUT(mA_fb), .CLKFBOUTB(),
+        .CLKOUT0(mA_108), .CLKOUT0B(), .CLKOUT1(mA_54), .CLKOUT1B(),
+        .CLKOUT2(mA_27),  .CLKOUT2B(), .CLKOUT3(mA_135), .CLKOUT3B(),
+        .CLKOUT4(mA_375), .CLKOUT5(), .CLKOUT6(),
+        .LOCKED(clock_locked), .PWRDWN(1'b0), .RST(1'b0)
     );
+    BUFG bA_fb  (.I(mA_fb),  .O(mA_fb_b));
+    BUFG bA_108 (.I(mA_108), .O(clk_108m));
+    BUFG bA_54  (.I(mA_54),  .O(clk_54m));
+    BUFG bA_27  (.I(mA_27),  .O(clk_27m));
+    BUFG bA_135 (.I(mA_135), .O(clk_135));
+    BUFG bA_375 (.I(mA_375), .O(clk_wave375));
 
     // clk_27m = CLKDIV ÷5 del 135 (patrón nestang/z8086/Gowin en GW5A): el par
     // PCLK(27)/FCLK(135) de los OSER10 del TMDS queda alineado POR CONSTRUCCIÓN.
@@ -323,16 +343,26 @@ end
     wire clk_hdmi;              // 74.25 MHz pixel 720p
     wire clk_hdmi5;             // 371.25 MHz TMDS x5
     wire pll27_lock;            // _87: gatea el reset del PLL DDR3 (calib estable)
-    pll_27 pll27_video (
-        .clkin  (ex_clk_27m),   // pad 50 MHz
-        .clkout0(clk27_video),
-        .lock_o (pll27_lock)
+    // ---- ZYNQ: clk27_video = el 27 de MMCM_A (el Tang usaba un PLL aparte) ----
+    assign clk27_video = clk_27m;
+    assign pll27_lock  = clock_locked;
+    // ---- ZYNQ MMCM_C: 27 x 27.5 = VCO 742.5 -> /10 = 74.25 ; /2 = 371.25 (validado en bringup/hdmi720) ----
+    wire mC_fb, mC_fb_b, mC_74, mC_371, mC_lock;
+    MMCME2_BASE #(
+        .BANDWIDTH("OPTIMIZED"), .CLKIN1_PERIOD(37.037), .DIVCLK_DIVIDE(1),
+        .CLKFBOUT_MULT_F(27.500), .CLKFBOUT_PHASE(0.0),
+        .CLKOUT0_DIVIDE_F(2.000), .CLKOUT0_DUTY_CYCLE(0.5), .CLKOUT0_PHASE(0.0),   // 371.25
+        .CLKOUT1_DIVIDE(10),      .CLKOUT1_DUTY_CYCLE(0.5), .CLKOUT1_PHASE(0.0),   //  74.25
+        .REF_JITTER1(0.010), .STARTUP_WAIT("FALSE")
+    ) pll74_video (
+        .CLKIN1(clk27_video), .CLKFBIN(mC_fb_b), .CLKFBOUT(mC_fb), .CLKFBOUTB(),
+        .CLKOUT0(mC_371), .CLKOUT0B(), .CLKOUT1(mC_74), .CLKOUT1B(),
+        .CLKOUT2(), .CLKOUT2B(), .CLKOUT3(), .CLKOUT3B(), .CLKOUT4(), .CLKOUT5(), .CLKOUT6(),
+        .LOCKED(mC_lock), .PWRDWN(1'b0), .RST(~clock_locked)
     );
-    pll_74 pll74_video (
-        .clkin  (clk27_video),
-        .clkout0(clk_hdmi),
-        .clkout1(clk_hdmi5)
-    );
+    BUFG bC_fb  (.I(mC_fb),  .O(mC_fb_b));
+    BUFG bC_74  (.I(mC_74),  .O(clk_hdmi));
+    BUFG bC_371 (.I(mC_371), .O(clk_hdmi5));
 
     // _84: el OPL3 corre en clk_27m (PLLA principal, HERMANO de clk_54m):
     // cruce host_if emparentado que el STA cronometra (la afifo llevaba
@@ -416,16 +446,10 @@ end
     // El fan_ctrl se queda instanciado SOLO como termometro: fan_dbg_cnt
     // sigue saliendo por el COM11 (columna T), su decision se ignora.
     wire fan_en_ctrl;  // decision del control, hoy ignorada (telemetria)
-    fan_ctrl #(.WIN_CYC(32'd262144), .K_ON(10'd3), .K_OFF(10'd1),
-               .FORCE_ON_SEC(32'd360)) u_fanctrl (
-        .clk        (clk_27m),
-        .reset_n    (clock_locked),
-        .ro_en      (fan_ro_en),
-        .ro_cnt_rst (fan_ro_rst),
-        .ro_cnt     (fan_ro_cnt),
-        .fan_en     (fan_en_ctrl),
-        .dbg_cnt    (fan_dbg_cnt)
-    );
+    // ZYNQ: sin ventilador (fan_ctrl + ro_osc fuera)
+    assign fan_en_ctrl = 1'b0;
+    assign fan_dbg_cnt = 20'd0;
+    assign fan_ro_en = 1'b0; assign fan_ro_rst = 1'b0;
     // _175: experimento _173 CERRADO — con el pin a 1 el ventilador giro
     // perfecto en placa (03/08): el camino fisico (AB12/conector/fan) esta
     // BIEN. El "no gira nunca" de las s006/s007 tiene explicacion mundana:
@@ -433,11 +457,7 @@ end
     // de FORCE_ON_SEC) + baseline envenenada por reflasheo en caliente
     // (leccion _124). Vuelta al control automatico como en la v2.0.
     assign fan_en_o = fan_en_ctrl;
-    ro_osc u_roosc (
-        .ro_en   (fan_ro_en),
-        .cnt_rst (fan_ro_rst),
-        .cnt_out (fan_ro_cnt)
-    );
+    assign fan_ro_cnt = 20'd0;
 
     // ================================================================
     //  DEBUG BRING-UP 60K — latidos de reloj y estado vital por PMODs
@@ -663,6 +683,7 @@ end
     localparam [3:0] TON = 4'd3;
     localparam [3:0] TP = 4'd1; //prefetch time
     reg [1:0] state_demux;
+    reg [3:0] counter_demux_n;
     reg [3:0] counter_demux;
     reg low_byte_demux;
     wire update_demux;
@@ -674,8 +695,9 @@ end
             low_byte_demux <= 0;
         end 
         else begin
-            counter_demux = counter_demux + 4'd1;
-            casex ({state_demux, counter_demux})
+            counter_demux_n = counter_demux + 4'd1;   // ZYNQ: sin asignacion mixta
+            counter_demux <= counter_demux_n;
+            casex ({state_demux, counter_demux_n})
                 {IDLE, 4'bxxxx}: begin
                     msel <= 2'b00;
                     counter_demux <= 4'd0;
@@ -1118,6 +1140,7 @@ assign keyboard_addr = ppi_port_c[3:0];
     localparam ACTIVE_ISO = 2'd1;
     localparam WAIT_ISO = 2'd2;
     reg [1:0] state_iso;
+    reg [2:0] counter_iso_n;
     reg [2:0] counter_iso;
     wire io_active;
 
@@ -1136,8 +1159,9 @@ assign keyboard_addr = ppi_port_c[3:0];
             ex_bus_wr_n_ff <= 1;
         end 
         else begin
-            counter_iso = counter_iso + 3'd1;
-            casex ({state_iso, counter_iso})
+            counter_iso_n = counter_iso + 3'd1;       // ZYNQ: sin asignacion mixta
+            counter_iso <= counter_iso_n;
+            casex ({state_iso, counter_iso_n})
                 {IDLE_ISO, 3'bxxx}: begin
                     ex_bus_rd_n_ff <= 1;
                     ex_bus_wr_n_ff <= 1;
@@ -1215,7 +1239,13 @@ assign keyboard_addr = ppi_port_c[3:0];
                     // condicion del MSXnano, que llega a 5,36 sin problemas.
                     if ( ram_write == 1 || (ex_bus_iorq_n == 0)&& (bus_rd_n == 0 || bus_wr_n == 0) ) begin
 `else
+`ifdef ZYNQ
+                    // ZYNQ: un fallo de cache de memory_axi tarda mas que un T-state
+                    // tambien a 3,58: el termino ram_busy de las lecturas SIEMPRE
+                    if ( ram_write == 1 || (bus_mreq_n == 0 && bus_rd_n == 0 && ram_busy == 1) || (ex_bus_iorq_n == 0)&& (bus_rd_n == 0 || bus_wr_n == 0) ) begin
+`else
                     if ( ram_write == 1 || (turbo_eff == 1 && bus_mreq_n == 0 && bus_rd_n == 0 && ram_busy == 1) || (ex_bus_iorq_n == 0)&& (bus_rd_n == 0 || bus_wr_n == 0) ) begin  // P2: sin Compatible Mode (= v1.9 nano)
+`endif
 `endif
                         wait_io_ff <= 0;
                         state_wait <= WAIT_STATE1;
@@ -1238,7 +1268,13 @@ assign keyboard_addr = ppi_port_c[3:0];
 `ifdef TURBO_SIN_GUARDA_SDRAM
                     if ( (turbo_eff ? clk_falling_5m4_54 : clk_falling_3m6_54) == 1 ) begin
 `else
-                    if ( (turbo_eff ? clk_falling_5m4_54 : clk_falling_3m6_54) == 1 && (turbo_eff == 0 || ram_busy == 0) ) begin
+                    if ( (turbo_eff ? clk_falling_5m4_54 : clk_falling_3m6_54) == 1 && (
+`ifdef ZYNQ
+                         ram_busy == 0
+`else
+                         turbo_eff == 0 || ram_busy == 0
+`endif
+                         ) ) begin
 `endif
                         wait_io_ff <= 1;
                         state_wait <= WAIT_STATE3;
@@ -2047,7 +2083,20 @@ assign keyboard_addr = ppi_port_c[3:0];
 
     // ---- reloj maestro 85.909 MHz (27 x 35/11, 0 ppm vs 24x colorburst) ----
     wire clk_86, pll86_lock;
-    pll_86 pll86_vdp ( .clkout0(clk_86), .lock(pll86_lock), .clkin(clk27_video) );
+    // ---- ZYNQ PLLE2_D: 27 x 35 = VCO 945 -> /11 = 85.909 (V9968) ----
+    wire pD_fb, pD_fb_b, pD_86;
+    PLLE2_BASE #(
+        .BANDWIDTH("OPTIMIZED"), .CLKIN1_PERIOD(37.037), .DIVCLK_DIVIDE(1),
+        .CLKFBOUT_MULT(35), .CLKFBOUT_PHASE(0.0),
+        .CLKOUT0_DIVIDE(11), .CLKOUT0_DUTY_CYCLE(0.5), .CLKOUT0_PHASE(0.0),
+        .REF_JITTER1(0.010), .STARTUP_WAIT("FALSE")
+    ) pll86_vdp (
+        .CLKIN1(clk27_video), .CLKFBIN(pD_fb_b), .CLKFBOUT(pD_fb),
+        .CLKOUT0(pD_86), .CLKOUT1(), .CLKOUT2(), .CLKOUT3(), .CLKOUT4(), .CLKOUT5(),
+        .LOCKED(pll86_lock), .PWRDWN(1'b0), .RST(~clock_locked)
+    );
+    BUFG bD_fb (.I(pD_fb), .O(pD_fb_b));
+    BUFG bD_86 (.I(pD_86), .O(clk_86));
 
     // _125b: syn_maxfan — rst86_n abanica a TODO el dominio clk_86 (shim +
     // core V9968) y su ultima etapa aparecio como migaja de -0.063 en el
@@ -2148,7 +2197,7 @@ assign keyboard_addr = ppi_port_c[3:0];
         .dbg_park(v68dbg_park),
         .dbg_drops(v68dbg_drops)
     );
-`ifdef ENABLE_VRAM_DDR3
+`ifdef ENABLE_VRAM_AXI
     // ==== EXPERIMENTO _128X: la VRAM del V9968 vive en la DDR3 del SOM ====
     // Los MISMOS bridges CDC, con el lado far a clk_x1 (74.25, lo genera la
     // IP DDR3) y hablando con v9968_ddr3_backend en vez de memory.v. Los
@@ -2187,28 +2236,31 @@ assign keyboard_addr = ppi_port_c[3:0];
         .wv2_wdata(), .wv2_wmask(), .wv2_dout(vddr_b_dout), .wv2_done(vddr_b_done)
     );
 
-    v9968_ddr3_backend u_vddr3 (
+    // ==== ZYNQ: la VRAM del V9968 en la DDR del PS (zynq/v9968_axi_backend.v, HP0 @ FCLK0) ====
+    // Misma interfaz que v9968_ddr3_backend; los bridges se conectan tal cual.
+    reg [1:0] rst150_s = 2'b00;
+    always @(posedge fclk0) rst150_s <= {rst150_s[0], frst0_n};
+    v9968_axi_backend #(.VRAM_BASE(32'h1000_0000)) u_vddr3 (
         .a_req(vddr_a_req), .a_we(vddr_a_we), .a_addr(vddr_a_addr),
         .a_wdata(vddr_a_wdata), .a_wmask(vddr_a_wmask),
         .a_dout(vddr_a_dout), .a_done(vddr_a_done),
         .b_req(vddr_b_req), .b_addr(vddr_b_addr),
         .b_dout(vddr_b_dout), .b_done(vddr_b_done),
         .clk_x1_out(vddr_clk_x1), .ready(vddr_ready), .diag(vddr_diag),
-        .dbg_ops(vddr_ops),        // _129b: {lecturas, escrituras} servidas
+        .dbg_ops(vddr_ops),
         .recal_req(1'b0),
-        .clk_27(clk27_video),      // misma topologia que wave_ddr3/_86
-        // _130 FIDELIDAD nand2mario: clk/mdclk del controlador desde el PAD
-        // de 50MHz, EXACTAMENTE como su ddr3_framebuffer (probado con imagen
-        // en esta placa). (La _128Z probo clk_54m del PLL — tambien calibro;
-        // la teoria pad-vs-PLL de alanswx no era LA variable: lo decisivo
-        // era darle TIEMPO a la calibracion. Fidelidad total = pad.)
-        .clk_g50(ex_clk_27m),
-        .pll27_lock(pll27_lock),
-        .ddr_addr(ddr_addr), .ddr_bank(ddr_bank), .ddr_cs(ddr_cs),
-        .ddr_ras(ddr_ras), .ddr_cas(ddr_cas), .ddr_we(ddr_we),
-        .ddr_ck(ddr_ck), .ddr_ck_n(ddr_ck_n), .ddr_cke(ddr_cke),
-        .ddr_odt(ddr_odt), .ddr_reset_n(ddr_reset_n), .ddr_dm(ddr_dm),
-        .ddr_dq(ddr_dq), .ddr_dqs(ddr_dqs), .ddr_dqs_n(ddr_dqs_n)
+        .aclk(fclk0), .aresetn(rst150_s[1]),
+        .M_AWID(hp0_awid), .M_AWADDR(hp0_awaddr), .M_AWLEN(hp0_awlen), .M_AWSIZE(hp0_awsize),
+        .M_AWBURST(hp0_awburst), .M_AWLOCK(hp0_awlock), .M_AWCACHE(hp0_awcache), .M_AWPROT(hp0_awprot),
+        .M_AWQOS(hp0_awqos), .M_AWVALID(hp0_awvalid), .M_AWREADY(hp0_awready),
+        .M_WID(hp0_wid), .M_WDATA(hp0_wdata), .M_WSTRB(hp0_wstrb), .M_WLAST(hp0_wlast),
+        .M_WVALID(hp0_wvalid), .M_WREADY(hp0_wready),
+        .M_BID(hp0_bid), .M_BRESP(hp0_bresp), .M_BVALID(hp0_bvalid), .M_BREADY(hp0_bready),
+        .M_ARID(hp0_arid), .M_ARADDR(hp0_araddr), .M_ARLEN(hp0_arlen), .M_ARSIZE(hp0_arsize),
+        .M_ARBURST(hp0_arburst), .M_ARLOCK(hp0_arlock), .M_ARCACHE(hp0_arcache), .M_ARPROT(hp0_arprot),
+        .M_ARQOS(hp0_arqos), .M_ARVALID(hp0_arvalid), .M_ARREADY(hp0_arready),
+        .M_RID(hp0_rid), .M_RDATA(hp0_rdata), .M_RRESP(hp0_rresp), .M_RLAST(hp0_rlast),
+        .M_RVALID(hp0_rvalid), .M_RREADY(hp0_rready)
     );
 `else
     // _148 FIX B — CAMINO LEGACY (VRAM en la SDRAM compartida, respaldo _137).
@@ -2394,7 +2446,15 @@ assign keyboard_addr = ppi_port_c[3:0];
     //                      [4]=disparo A [5]=disparo B [6]/[7]=autofire
     // 🚨 14/09: estaba escrito como [0]=arriba y los mandos salian girados 180 grados
     // (medido en la Zynq por el buzon HID: DN daba izquierda, L abajo, R arriba).
-    wire [15:0] mcu_hid1, mcu_hid2;
+    wire [15:0] mcu_hid1_u, mcu_hid2_u;                 // del BL616 (iosys)
+    reg  [15:0] joy1_mb_s1 = 16'd0, joy1_mb_s2 = 16'd0;  // ZYNQ: del companion (buzon, clk_54m -> clk_27m)
+    reg  [15:0] joy2_mb_s1 = 16'd0, joy2_mb_s2 = 16'd0;
+    always @(posedge clk_27m) begin
+        joy1_mb_s1 <= joy1_mbox; joy1_mb_s2 <= joy1_mb_s1;
+        joy2_mb_s1 <= joy2_mbox; joy2_mb_s2 <= joy2_mb_s1;
+    end
+    wire [15:0] mcu_hid1 = mcu_hid1_u | joy1_mb_s2;
+    wire [15:0] mcu_hid2 = mcu_hid2_u | joy2_mb_s2;
     assign joystick0 = { mcu_hid1[9],  mcu_hid1[1],    // autofire  <- X, Y
                          mcu_hid1[0],  mcu_hid1[8],    // TrigB/A   <- B, A
                          mcu_hid1[4],  mcu_hid1[5],    // [3] arriba / [2] abajo
@@ -2421,8 +2481,8 @@ assign keyboard_addr = ppi_port_c[3:0];
 
         .joy1           (iosys_joy),       // el teclado USB que YA lee la FPGA
         .joy2           (12'd0),
-        .hid1           (mcu_hid1),
-        .hid2           (mcu_hid2),
+        .hid1           (mcu_hid1_u),
+        .hid2           (mcu_hid2_u),
 
         // Peldano 1: la carga de ROM NO se conecta todavia. El sumidero natural
         // ya existe (rom_addr/rom_dout/rom_write con flash_idle, ~linea 2270),
@@ -2735,7 +2795,7 @@ assign wv3_we    = 1'b0;
 assign wv3_addr  = 22'd0;
 assign wv3_wdata = 8'd0;
 `else
-`ifdef ENABLE_VRAM_DDR3
+`ifdef ENABLE_VRAM_AXI
 // _128X: la VRAM vive en la DDR3 — los puertos wv2/wv3 de memory.v inertes
 `ifndef ENABLE_ADPCM_SDRAM
 assign wv2_req   = 1'b0;
@@ -2761,66 +2821,40 @@ reg cpu_run_r = 1'b0;
 always @(posedge clk_54m)
     cpu_run_r <= bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok;
 
-memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
-    .clk_27m(clk_54m),
-    .clk_108m(clk_108m),
-    .bus_reset_n(bus_reset_n ),
-    .video_dhclk(VideoDHClk),
-    .video_dlclk(VideoDLClk),
-
-    .ram_din(ram_din),
-    .ram_req(ram_req),
-    .ram_write(ram_write),
-    .ram_addr(ram_addr),
-    .vram_din(VrmDbo),
-    .vram_write(~WeVdp_n),
-    .vram_addr(VdpAdr),
-    .bus_rfsh_n(bus_rfsh_n),
-    // _181: mismo termino que el RESET_n del T80 — el refresco autonomo solo
-    // puede disparar cuando el Z80 esta provadamente parado (ver memory.v)
-    // V3.6: con la DMA, el refresco autonomo SOLO en sus ventanas de espera (dma_rfsh_ok),
-    // nunca durante la rafaga de escrituras (memory.v _175/_181: pisaria una aceptacion)
-    .cpu_run(cpu_run_r),
-
-    .ram_dout(ram_dout),
-    .vram_dout(VrmDbi2),
-    .ram_busy(ram_busy),
-
-    // _104: puerto wave (roba turnos de CPU vacios; filas 4096+)
-    .wv_req(wv_req),
-    .wv_we(wv_we),
-    .wv_addr(wv_addr),
-    .wv_wdata(wv_wdata),
-    .wv_dout(wv_dout),
-    .wv_done(wv_done),
-
-    // V9968: puerto wv2 (mismos turnos vacios, prioridad wave>wv2)
-    .wv2_req(wv2_req),
-    .wv2_we(wv2_we),
-    .wv2_addr(wv2_addr),
-    .wv2_wdata(wv2_wdata),
-    .wv2_dout(wv2_dout),
-    .wv2_done(wv2_done),
-
-    // V9968 _120: puerto wv3 (canal B, prioridad wave>wv2>wv3)
-    .wv3_req(wv3_req),
-    .wv3_we(wv3_we),
-    .wv3_addr(wv3_addr),
-    .wv3_wdata(wv3_wdata),
-    .wv3_dout(wv3_dout),
-    .wv3_done(wv3_done),
-
-    .O_sdram_clk(O_sdram_clk),
-    .O_sdram_cke(O_sdram_cke),
-    .O_sdram_cs_n(O_sdram_cs_n),
-    .O_sdram_cas_n(O_sdram_cas_n),
-    .O_sdram_ras_n(O_sdram_ras_n),
-    .O_sdram_wen_n(O_sdram_wen_n),
-    .IO_sdram_dq(IO_sdram_dq),
-    .O_sdram_addr(O_sdram_addr),
-    .O_sdram_ba(O_sdram_ba),
-    .O_sdram_dqm(O_sdram_dqm)
+// ==== ZYNQ: la RAM del Z80 en la DDR del PS (zynq/memory_axi.v, HP1 @ clk_54m) ====
+// Mismo contrato ram_* que memory_ctrl. vram_*/wv*/rfsh no existen aqui (V9968 con
+// VRAM en AXI; ADPCM en BRAM; sin wave; el refresco lo hace el DDRC).
+wire [31:0] mem_dbg_hits, mem_dbg_miss, mem_dbg_state;
+reg  [1:0]  rst54_s = 2'b00;
+always @(posedge clk_54m) rst54_s <= {rst54_s[0], frst0_n};
+wire        rst54_n = rst54_s[1];
+memory_axi #(.RAM_BASE(32'h1080_0000), .LINES_LOG(12)) mem1 (
+    .clk_54m(clk_54m), .bus_reset_n(bus_reset_n),
+    .video_dhclk(VideoDHClk), .video_dlclk(VideoDLClk), .cpu_run(cpu_run_r),
+    .ram_din(ram_din), .ram_req(ram_req), .ram_write(ram_write), .ram_addr(ram_addr),
+    .ram_dout(ram_dout), .ram_busy(ram_busy),
+    .dbg_hits(mem_dbg_hits), .dbg_miss(mem_dbg_miss), .dbg_state(mem_dbg_state), .ready(),
+    .aresetn(rst54_n),
+    .M_AWID(hp1_awid), .M_AWADDR(hp1_awaddr), .M_AWLEN(hp1_awlen), .M_AWSIZE(hp1_awsize),
+    .M_AWBURST(hp1_awburst), .M_AWLOCK(hp1_awlock), .M_AWCACHE(hp1_awcache), .M_AWPROT(hp1_awprot),
+    .M_AWQOS(hp1_awqos), .M_AWVALID(hp1_awvalid), .M_AWREADY(hp1_awready),
+    .M_WID(hp1_wid), .M_WDATA(hp1_wdata), .M_WSTRB(hp1_wstrb), .M_WLAST(hp1_wlast),
+    .M_WVALID(hp1_wvalid), .M_WREADY(hp1_wready),
+    .M_BID(hp1_bid), .M_BRESP(hp1_bresp), .M_BVALID(hp1_bvalid), .M_BREADY(hp1_bready),
+    .M_ARID(hp1_arid), .M_ARADDR(hp1_araddr), .M_ARLEN(hp1_arlen), .M_ARSIZE(hp1_arsize),
+    .M_ARBURST(hp1_arburst), .M_ARLOCK(hp1_arlock), .M_ARCACHE(hp1_arcache), .M_ARPROT(hp1_arprot),
+    .M_ARQOS(hp1_arqos), .M_ARVALID(hp1_arvalid), .M_ARREADY(hp1_arready),
+    .M_RID(hp1_rid), .M_RDATA(hp1_rdata), .M_RRESP(hp1_rresp), .M_RLAST(hp1_rlast),
+    .M_RVALID(hp1_rvalid), .M_RREADY(hp1_rready)
 );
+// puertos de memory_ctrl que aqui no existen: en reposo
+assign VrmDbi2 = 16'd0;
+assign wv_dout = 16'd0;  assign wv_done = 1'b0;
+assign wv2_dout = 16'd0; assign wv2_done = 1'b0;
+assign wv3_dout = 16'd0; assign wv3_done = 1'b0;
+assign O_sdram_clk = 1'b0; assign O_sdram_cke = 1'b0; assign O_sdram_cs_n = 1'b1;
+assign O_sdram_cas_n = 1'b1; assign O_sdram_ras_n = 1'b1; assign O_sdram_wen_n = 1'b1;
+assign O_sdram_addr = 13'd0; assign O_sdram_ba = 2'd0; assign O_sdram_dqm = 2'b11;
 
     // ===== _161 ESTRUCTURA DE GANANCIA: registro de ganancia maestra =====
     // 0:x1  1:x1,5  2:x2  3:x3  4:x4  5:x5  6:x6  7:x8   (defecto x5 = +14,0 dB)
@@ -4775,7 +4809,11 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
         case (ff_flash_state)
     
             STATE_RESET: begin   // reset
+`ifdef ZYNQ
+                ff_flash_state <= STATE_IDLE;    // ZYNQ: el pack lo carga el PS en la DDR
+`else
                 ff_flash_state <= STATE_READ_START;
+`endif
                 ff_flash_rd <= 0;
                 ff_rom_wr <= 0;
                 ff_flash_terminate <= 0;
@@ -5252,52 +5290,40 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     // CMD/DAT0 ya no depende del divisor (sd_reader.sv, sddat0_s / sdcmdin_s).
     // Si una placa diera guerra: FAST_DIV 1 = 4,5 MHz, 4 = lo de siempre.
     localparam [15:0] SD_FAST_DIV = 16'd0;
-    sd_reader #(
-        .CLK_DIV(3'd2),
-        .FAST_DIV(SD_FAST_DIV),
-        .SIMULATE(0)
-    ) sd1 (
-        // 🚨 EL LECTOR VUELVE A VIRGEN AL SOLTAR EL MANDO. sd_reader solo
-        // atiende `init` estando en STANDBY (sd_reader.sv:258). Si el puente
-        // arranca la tarjeta, el lector pasa a IDLING y la peticion de
-        // inicializacion que hace NEXTOR al arrancar el MSX SE IGNORA EN
-        // SILENCIO: Nextor se queda esperando algo que ya no va a pasar, y el
-        // MSX no arranca. Medido: con v31h (sin encender la tarjeta) el MSX
-        // arranca tras soltar; con v31i (encendiendola) no. Devolverlo a
-        // STANDBY deja la tarjeta como Nextor espera encontrarla.
-        .rstn(bus_reset_n),
-        .clk(clk_27m),
-        .sdclk(sd_sclk),
-        .sdcmd(sd_cmd),
-        .sddat0(sd_dat0),                  
-        .card_stat(sd_card_stat_w),        // show the sdcard initialize status
-        .card_type(sd_card_type_w),        // 0=UNKNOWN    , 1=SDv1    , 2=SDv2  , 3=SDHCv2
-        // La SD vuelve a ser EXCLUSIVAMENTE de Nextor: se acabo el traspaso de
-        // mando que nos costo dos noches.
-        .rstart(ff_sd_rstart),
-        .rsector(ff_sd_sector),
-        .rbusy(sd_busy_w),
-        .rdone(sd_done_w),
-        .outen(sd_outen_w),                // when outen=1, a byte of sector content is read out from outbyte
-        .outaddr(sd_outaddr_w),            // outaddr from 0 to 511, because the sector size is 512
-        .outbyte(sd_outbyte_w),            // a byte of sector content
-        .wstart(ff_sd_wstart), 
-        .inbyte(sd_inbyte_w),
-        .c_size(sd_c_size_w),
-        .c_size_mult(sd_c_size_mult_w),
-        .read_bl_len(sd_read_bl_len_w),
-        .mid(sd_mid_w),
-        .oid(sd_oid_w),
-        .pnm(sd_pnm_w),
-        .psn(sd_psn_w),
-        .crc_error(sd_crc_error_w),
-        .rcrc_error(sd_rcrc_error_w),
-        .timeout_error(sd_timeout_error_w),
-        .init(ff_sd_init),
-        // V3.5c: multibloque (CMD18/CMD25) gobernado desde los puertos de E/S
-        .rcount(sdio_count),
-        .buf_ack(sdio_ack | dma_ack),      // V3.6: la DMA tambien vacia el bufer
-        .blk_rdy(sd_blk_rdy_w)
+    // ==== ZYNQ: proxy de sectores (zynq/sd_axi_proxy.v, HP3 @ clk_27m) en lugar de sd_reader ====
+    // Misma interfaz de cliente. MODE 0: imagen de disco en la DDR cargada por xsdb
+    // (tools/boot.tcl <pack> <bit> <img>). MODE 1: el ARM sirve la tarjeta real
+    // (TF1/TF2) por el buzon SDBOX + IRQ_F2P. Los pines sd_* del header quedan en
+    // reposo hasta que haya un breakout (entonces, sd_reader de nuevo).
+    assign sd_sclk = 1'b1;
+    reg  [1:0] rst27_s = 2'b00;
+    always @(posedge clk_27m) rst27_s <= {rst27_s[0], frst0_n};
+    wire [15:0] sd_ram_blocks;
+    wire        sd_irq, sd_mode;
+    sd_axi_proxy #(.DISK_BASE(32'h1100_0000), .DISK_MB(32'd224),
+                   .SDBOX(32'h1FF0_0100), .SDBUF(32'h1FF1_0000)) sd1 (
+        .rstn(bus_reset_n), .clk(clk_27m),
+        .card_stat(sd_card_stat_w), .card_type(sd_card_type_w),
+        .rstart(ff_sd_rstart), .rsector(ff_sd_sector), .rbusy(sd_busy_w), .rdone(sd_done_w),
+        .outen(sd_outen_w), .outaddr(sd_outaddr_w), .outbyte(sd_outbyte_w),
+        .wstart(ff_sd_wstart), .inbyte(sd_inbyte_w),
+        .c_size(sd_c_size_w), .c_size_mult(sd_c_size_mult_w), .read_bl_len(sd_read_bl_len_w),
+        .mid(sd_mid_w), .oid(sd_oid_w), .pnm(sd_pnm_w), .psn(sd_psn_w),
+        .crc_error(sd_crc_error_w), .rcrc_error(sd_rcrc_error_w), .timeout_error(sd_timeout_error_w),
+        .init(ff_sd_init), .rcount(sdio_count), .buf_ack(sdio_ack | dma_ack), .blk_rdy(sd_blk_rdy_w),
+        .req_irq(sd_irq), .mode(sd_mode), .dbg_blocks(sd_ram_blocks),
+        .aresetn(rst27_s[1]),
+        .M_AWID(hp3_awid), .M_AWADDR(hp3_awaddr), .M_AWLEN(hp3_awlen), .M_AWSIZE(hp3_awsize),
+        .M_AWBURST(hp3_awburst), .M_AWLOCK(hp3_awlock), .M_AWCACHE(hp3_awcache), .M_AWPROT(hp3_awprot),
+        .M_AWQOS(hp3_awqos), .M_AWVALID(hp3_awvalid), .M_AWREADY(hp3_awready),
+        .M_WID(hp3_wid), .M_WDATA(hp3_wdata), .M_WSTRB(hp3_wstrb), .M_WLAST(hp3_wlast),
+        .M_WVALID(hp3_wvalid), .M_WREADY(hp3_wready),
+        .M_BID(hp3_bid), .M_BRESP(hp3_bresp), .M_BVALID(hp3_bvalid), .M_BREADY(hp3_bready),
+        .M_ARID(hp3_arid), .M_ARADDR(hp3_araddr), .M_ARLEN(hp3_arlen), .M_ARSIZE(hp3_arsize),
+        .M_ARBURST(hp3_arburst), .M_ARLOCK(hp3_arlock), .M_ARCACHE(hp3_arcache), .M_ARPROT(hp3_arprot),
+        .M_ARQOS(hp3_arqos), .M_ARVALID(hp3_arvalid), .M_ARREADY(hp3_arready),
+        .M_RID(hp3_rid), .M_RDATA(hp3_rdata), .M_RRESP(hp3_rresp), .M_RLAST(hp3_rlast),
+        .M_RVALID(hp3_rvalid), .M_RREADY(hp3_rready)
     );
 
     // ---- V3.6: DMA de LECTURA SD -> RAM (sd_dma.sv) ----------------------------
@@ -5650,7 +5676,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         // Lectura en dbg_audio_reader.py: spmiss = w0 >> 16, bgmiss = w0 & 0xFFFF.
         .cnt_a(v68dbg_miss),
         .cnt_b({aud_rst_cnt, aud_lock_cnt}),      // _127H: {resets HDMI, toggles lock}
-`ifdef ENABLE_VRAM_DDR3
+`ifdef ENABLE_VRAM_AXI
         // _128X: los 8 bits libres [23:16] llevan el diag de la DDR3
         // ({calib_drop, wd_fires[2:0], wd_ops[3:0]}); sano = 00
         .cnt_c({v68_dbg_apkt[31:24], vddr_diag, v68_dbg_apkt[15:0]}),
@@ -5659,7 +5685,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
 `endif
         // _134: los 11 bits libres llevan {tear[4:0], defer[5:0]} del yank
         .cnt_d({fan_en_o, v68_dbg_tear, v68_dbg_defer, fan_dbg_cnt}),
-`ifdef ENABLE_VRAM_DDR3
+`ifdef ENABLE_VRAM_AXI
         .cnt_e(vddr_ops),                         // _129b: ops DDR3 servidas
 `else
         .cnt_e({amp_src, amp_hdmi}),              // _133: vumetro {fuente, hdmi}
@@ -5904,11 +5930,20 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     // gbatang. Solo teclado en esta pieza; gamepads USB-A = pieza futura.
     wire        clk_usb12;
     wire        pll12_lock;
-    pll_12 pll12_usb (
-        .clkin  (ex_clk_27m),       // pad 50 MHz
-        .clkout0(clk_usb12),        // 12.000 MHz (VCO 900, generada para GW5AT-60)
-        .lock   (pll12_lock)
+    // ---- ZYNQ PLLE2_E: 50 x 24 = VCO 1200 -> /100 = 12 (usb_hid_host) ----
+    wire pE_fb, pE_fb_b, pE_12;
+    PLLE2_BASE #(
+        .BANDWIDTH("OPTIMIZED"), .CLKIN1_PERIOD(20.000), .DIVCLK_DIVIDE(1),
+        .CLKFBOUT_MULT(24), .CLKFBOUT_PHASE(0.0),
+        .CLKOUT0_DIVIDE(100), .CLKOUT0_DUTY_CYCLE(0.5), .CLKOUT0_PHASE(0.0),
+        .REF_JITTER1(0.010), .STARTUP_WAIT("FALSE")
+    ) pll12_usb (
+        .CLKIN1(ex_clk_27m), .CLKFBIN(pE_fb_b), .CLKFBOUT(pE_fb),
+        .CLKOUT0(pE_12), .CLKOUT1(), .CLKOUT2(), .CLKOUT3(), .CLKOUT4(), .CLKOUT5(),
+        .LOCKED(pll12_lock), .PWRDWN(1'b0), .RST(1'b0)
     );
+    BUFG bE_fb (.I(pE_fb), .O(pE_fb_b));
+    BUFG bE_12 (.I(pE_12), .O(clk_usb12));
     wire [1:0] usb1_typ, usb2_typ;
     wire       usb1_report, usb2_report;
     wire       usb1_conerr, usb2_conerr;
@@ -5985,7 +6020,32 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     end
     wire mo_rep_54 = mo_tog_s[2] ^ mo_tog_s[1];
 
-    assign msx_mouse_present = mo_seen_s1;
+    // ZYNQ: raton del companion (buzon). Mismo dominio (clk_54m) que msx_mouse.
+    reg       mb_mouse_seen = 1'b0;
+    reg [7:0] mb_rep_cnt = 8'd0;                      // telemetria: informes recibidos del buzon
+    reg [1:0] mb_btn_q = 2'b00;                       // botones: NIVEL (msx_mouse los saca por combinacional)
+    always @(posedge clk_54m) if (mb_mouse_rep) begin
+        mb_mouse_seen <= 1'b1; mb_rep_cnt <= mb_rep_cnt + 8'd1; mb_btn_q <= mb_mouse_btn[1:0];
+    end
+    wire [11:0] mm_cur_x;                             // telemetria: interior de msx_mouse
+    wire [7:0]  mm_rel_x;
+    reg  [3:0]  mm_strobe_cnt = 4'd0;                 // flancos del strobe (pin 8 del puerto 2) vistos a clk_54m
+    reg         mm_strobe_d = 1'b1;
+    always @(posedge clk_54m) begin
+        mm_strobe_d <= psgPB[5];
+        if (psgPB[5] != mm_strobe_d) mm_strobe_cnt <= mm_strobe_cnt + 4'd1;
+    end
+    // telemetria: ultimos 3 valores escritos en el registro 15 del PSG + cuenta (quien toca el strobe)
+    wire        r15_wr = (bus_addr[7:0] == 8'hA1 && bus_iorq_n == 1'b0 && bus_wr_n == 1'b0 && bus_m1_n == 1'b1
+                          && psg_addr_latch == 4'd15);
+    reg         r15_wr_d = 1'b0;
+    reg  [23:0] r15_hist = 24'd0;
+    reg  [7:0]  r15_cnt = 8'd0;
+    always @(posedge clk_54m) begin
+        r15_wr_d <= r15_wr;
+        if (r15_wr && !r15_wr_d) begin r15_hist <= {r15_hist[15:0], cpu_dout}; r15_cnt <= r15_cnt + 8'd1; end
+    end
+    assign msx_mouse_present = mo_seen_s1 | mb_mouse_seen;
 
     // Sensibilidad: el delta se divide por 2^MOUSE_SENS. Un raton USB moderno
     // tiene MUCHO mas DPI que uno de MSX, asi que sin dividir el puntero se va
@@ -5998,10 +6058,12 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     msx_mouse u_msx_mouse (
         .clk       (clk_54m),
         .rst_n     (bus_reset_n),
-        .rep_pulse (mo_rep_54),
-        .dx        (mo_dx_q),
-        .dy        (mo_dy_q),
-        .btn       ({mo_btn_q[1], mo_btn_q[0]}),   // {derecho, izquierdo}
+        .rep_pulse (mo_rep_54 | mb_mouse_rep),                              // ZYNQ: + raton del companion
+        .dx        (mb_mouse_rep ? mb_mouse_dx : mo_dx_q),
+        .dy        (mb_mouse_rep ? mb_mouse_dy : mo_dy_q),
+        .btn       ({mo_btn_q[1] | mb_btn_q[1], mo_btn_q[0] | mb_btn_q[0]}),   // {derecho, izquierdo}: nivel, OR de los dos ratones
+        .dbg_cur_x (mm_cur_x),
+        .dbg_rel_x (mm_rel_x),
         .sens      (MOUSE_SENS),
         .strobe    (psgPB[5]),                     // pin 8 del PUERTO 2
         .data      (msx_mouse_data),
@@ -6042,7 +6104,13 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         kbd_usb_s1 <= kbd_usb1 | kbd_usb2;
         kbd_usb_s2 <= kbd_usb_s1;
     end
-    assign keyboard = kbd_usb_s2;
+    // ZYNQ: + teclado inyectado desde xsdb (zynq/dbg_mailbox_axi.v, tools/key.tcl)
+    reg [127:0] kbd_mbox_s1 = 128'd0, kbd_mbox_s2 = 128'd0;
+    always @(posedge clk_27m) begin
+        kbd_mbox_s1 <= kbd_mbox;
+        kbd_mbox_s2 <= kbd_mbox_s1;
+    end
+    assign keyboard = kbd_usb_s2 | kbd_mbox_s2;
 `else
     // Sin el companion no queda otra fuente: el teclado del MSX se apaga.
     assign keyboard = 128'd0;
@@ -6167,6 +6235,110 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .A (keyboard_addr),
         .DO (keyboard_data),
         .FN (function_keys)
+    );
+
+
+    // ================================================================
+    //  ZYNQ: buzon de depuracion en la DDR (HP2 @ clk_54m). Desde xsdb:
+    //  teclado (bitmap HID en MBOX+0) y telemetria (MBOX+0x40..0x5F).
+    //  tools/key.tcl pulsa teclas; tools/tel.tcl lee la telemetria.
+    // ================================================================
+    dbg_mailbox_axi #(.MBOX(32'h1FF0_0000), .PERIOD(54000)) u_mbox (
+        .clk(clk_54m), .aresetn(rst54_n),
+        .kbd_mbox(kbd_mbox),
+        .joy1(joy1_mbox), .joy2(joy2_mbox),
+        .mouse_btn(mb_mouse_btn), .mouse_dx(mb_mouse_dx), .mouse_dy(mb_mouse_dy), .mouse_rep(mb_mouse_rep),
+        .tel_hits(mem_dbg_hits), .tel_miss(mem_dbg_miss),
+        .tel_status({vddr_ops[15:0], sd_mode, sd_irq, sd_busy_w, sd_blk_rdy_w, ff_sd_rstart, ff_sd_wstart,
+                     clock_locked, vddr_ready, iosys_frz, cpu_run_r, sd_card_type_w, sd_card_stat_w}),
+        .tel_dbg(mem_dbg_state),
+        .tel_dbg2({sd_ram_blocks, sdio_count, sd_timeout_error_w, sd_crc_error_w, sd_rcrc_error_w, ff_sd_init, sd_card_stat_w}),
+        // +0x60: raton y mandos (buzon HID): {present, port2, strobe, phase[2:0], 2'b0}, dx, dy, informes | data, joy0, joy1, 0
+        .tel_dbg3({msx_mouse_present, psg_reg15_port2, psgPB[5], msx_mouse_phase, 2'b00, mb_mouse_dx, mb_mouse_dy, mb_rep_cnt}),
+        .tel_dbg4({r15_hist, r15_cnt}),
+        .M_AWID(hp2_awid), .M_AWADDR(hp2_awaddr), .M_AWLEN(hp2_awlen), .M_AWSIZE(hp2_awsize),
+        .M_AWBURST(hp2_awburst), .M_AWLOCK(hp2_awlock), .M_AWCACHE(hp2_awcache), .M_AWPROT(hp2_awprot),
+        .M_AWQOS(hp2_awqos), .M_AWVALID(hp2_awvalid), .M_AWREADY(hp2_awready),
+        .M_WID(hp2_wid), .M_WDATA(hp2_wdata), .M_WSTRB(hp2_wstrb), .M_WLAST(hp2_wlast),
+        .M_WVALID(hp2_wvalid), .M_WREADY(hp2_wready),
+        .M_BID(hp2_bid), .M_BRESP(hp2_bresp), .M_BVALID(hp2_bvalid), .M_BREADY(hp2_bready),
+        .M_ARID(hp2_arid), .M_ARADDR(hp2_araddr), .M_ARLEN(hp2_arlen), .M_ARSIZE(hp2_arsize),
+        .M_ARBURST(hp2_arburst), .M_ARLOCK(hp2_arlock), .M_ARCACHE(hp2_arcache), .M_ARPROT(hp2_arprot),
+        .M_ARQOS(hp2_arqos), .M_ARVALID(hp2_arvalid), .M_ARREADY(hp2_arready),
+        .M_RID(hp2_rid), .M_RDATA(hp2_rdata), .M_RRESP(hp2_rresp), .M_RLAST(hp2_rlast),
+        .M_RVALID(hp2_rvalid), .M_RREADY(hp2_rready)
+    );
+
+    // ================================================================
+    //  ZYNQ: PS7 (DDR3 + MIO + FCLK0 + HP0..HP3). Block design: zynq/bd_ps7.tcl
+    //  HP0 = VRAM (v9968_axi_backend) a FCLK0 = 150 MHz
+    //  HP1 = RAM del Z80 (memory_axi) a clk_54m
+    //  HP2 = buzon xsdb (dbg_mailbox_axi) a clk_54m
+    //  HP3 = proxy de sectores "SD" (sd_axi_proxy) a clk_27m; su req_irq -> IRQ_F2P[0]
+    // ================================================================
+    ps7_bd_wrapper ps7 (
+        .DDR_addr(DDR_addr), .DDR_ba(DDR_ba), .DDR_cas_n(DDR_cas_n), .DDR_ck_n(DDR_ck_n),
+        .DDR_ck_p(DDR_ck_p), .DDR_cke(DDR_cke), .DDR_cs_n(DDR_cs_n), .DDR_dm(DDR_dm),
+        .DDR_dq(DDR_dq), .DDR_dqs_n(DDR_dqs_n), .DDR_dqs_p(DDR_dqs_p), .DDR_odt(DDR_odt),
+        .DDR_ras_n(DDR_ras_n), .DDR_reset_n(DDR_reset_n), .DDR_we_n(DDR_we_n),
+        .FIXED_IO_ddr_vrn(FIXED_IO_ddr_vrn), .FIXED_IO_ddr_vrp(FIXED_IO_ddr_vrp),
+        .FIXED_IO_mio(FIXED_IO_mio), .FIXED_IO_ps_clk(FIXED_IO_ps_clk),
+        .FIXED_IO_ps_porb(FIXED_IO_ps_porb), .FIXED_IO_ps_srstb(FIXED_IO_ps_srstb),
+        .FCLK_CLK0(fclk0), .FCLK_RESET0_N(frst0_n), .IRQ_F2P(sd_irq),
+        .UART0_TX(bl616_jtagsel), .UART0_RX(iosys_uart_tx),     // el ARM habla con iosys_bl616 (OSD)
+        .HP0_ACLK(fclk0), .HP1_ACLK(clk_54m), .HP2_ACLK(clk_54m), .HP3_ACLK(clk_27m),
+        .S_AXI_HP0_awid(hp0_awid), .S_AXI_HP0_awaddr(hp0_awaddr), .S_AXI_HP0_awlen(hp0_awlen),
+        .S_AXI_HP0_awsize(hp0_awsize), .S_AXI_HP0_awburst(hp0_awburst), .S_AXI_HP0_awlock(hp0_awlock),
+        .S_AXI_HP0_awcache(hp0_awcache), .S_AXI_HP0_awprot(hp0_awprot), .S_AXI_HP0_awqos(hp0_awqos),
+        .S_AXI_HP0_awvalid(hp0_awvalid), .S_AXI_HP0_awready(hp0_awready),
+        .S_AXI_HP0_wid(hp0_wid), .S_AXI_HP0_wdata(hp0_wdata), .S_AXI_HP0_wstrb(hp0_wstrb),
+        .S_AXI_HP0_wlast(hp0_wlast), .S_AXI_HP0_wvalid(hp0_wvalid), .S_AXI_HP0_wready(hp0_wready),
+        .S_AXI_HP0_bid(hp0_bid), .S_AXI_HP0_bresp(hp0_bresp), .S_AXI_HP0_bvalid(hp0_bvalid), .S_AXI_HP0_bready(hp0_bready),
+        .S_AXI_HP0_arid(hp0_arid), .S_AXI_HP0_araddr(hp0_araddr), .S_AXI_HP0_arlen(hp0_arlen),
+        .S_AXI_HP0_arsize(hp0_arsize), .S_AXI_HP0_arburst(hp0_arburst), .S_AXI_HP0_arlock(hp0_arlock),
+        .S_AXI_HP0_arcache(hp0_arcache), .S_AXI_HP0_arprot(hp0_arprot), .S_AXI_HP0_arqos(hp0_arqos),
+        .S_AXI_HP0_arvalid(hp0_arvalid), .S_AXI_HP0_arready(hp0_arready),
+        .S_AXI_HP0_rid(hp0_rid), .S_AXI_HP0_rdata(hp0_rdata), .S_AXI_HP0_rresp(hp0_rresp),
+        .S_AXI_HP0_rlast(hp0_rlast), .S_AXI_HP0_rvalid(hp0_rvalid), .S_AXI_HP0_rready(hp0_rready),
+        .S_AXI_HP1_awid(hp1_awid), .S_AXI_HP1_awaddr(hp1_awaddr), .S_AXI_HP1_awlen(hp1_awlen),
+        .S_AXI_HP1_awsize(hp1_awsize), .S_AXI_HP1_awburst(hp1_awburst), .S_AXI_HP1_awlock(hp1_awlock),
+        .S_AXI_HP1_awcache(hp1_awcache), .S_AXI_HP1_awprot(hp1_awprot), .S_AXI_HP1_awqos(hp1_awqos),
+        .S_AXI_HP1_awvalid(hp1_awvalid), .S_AXI_HP1_awready(hp1_awready),
+        .S_AXI_HP1_wid(hp1_wid), .S_AXI_HP1_wdata(hp1_wdata), .S_AXI_HP1_wstrb(hp1_wstrb),
+        .S_AXI_HP1_wlast(hp1_wlast), .S_AXI_HP1_wvalid(hp1_wvalid), .S_AXI_HP1_wready(hp1_wready),
+        .S_AXI_HP1_bid(hp1_bid), .S_AXI_HP1_bresp(hp1_bresp), .S_AXI_HP1_bvalid(hp1_bvalid), .S_AXI_HP1_bready(hp1_bready),
+        .S_AXI_HP1_arid(hp1_arid), .S_AXI_HP1_araddr(hp1_araddr), .S_AXI_HP1_arlen(hp1_arlen),
+        .S_AXI_HP1_arsize(hp1_arsize), .S_AXI_HP1_arburst(hp1_arburst), .S_AXI_HP1_arlock(hp1_arlock),
+        .S_AXI_HP1_arcache(hp1_arcache), .S_AXI_HP1_arprot(hp1_arprot), .S_AXI_HP1_arqos(hp1_arqos),
+        .S_AXI_HP1_arvalid(hp1_arvalid), .S_AXI_HP1_arready(hp1_arready),
+        .S_AXI_HP1_rid(hp1_rid), .S_AXI_HP1_rdata(hp1_rdata), .S_AXI_HP1_rresp(hp1_rresp),
+        .S_AXI_HP1_rlast(hp1_rlast), .S_AXI_HP1_rvalid(hp1_rvalid), .S_AXI_HP1_rready(hp1_rready),
+        .S_AXI_HP2_awid(hp2_awid), .S_AXI_HP2_awaddr(hp2_awaddr), .S_AXI_HP2_awlen(hp2_awlen),
+        .S_AXI_HP2_awsize(hp2_awsize), .S_AXI_HP2_awburst(hp2_awburst), .S_AXI_HP2_awlock(hp2_awlock),
+        .S_AXI_HP2_awcache(hp2_awcache), .S_AXI_HP2_awprot(hp2_awprot), .S_AXI_HP2_awqos(hp2_awqos),
+        .S_AXI_HP2_awvalid(hp2_awvalid), .S_AXI_HP2_awready(hp2_awready),
+        .S_AXI_HP2_wid(hp2_wid), .S_AXI_HP2_wdata(hp2_wdata), .S_AXI_HP2_wstrb(hp2_wstrb),
+        .S_AXI_HP2_wlast(hp2_wlast), .S_AXI_HP2_wvalid(hp2_wvalid), .S_AXI_HP2_wready(hp2_wready),
+        .S_AXI_HP2_bid(hp2_bid), .S_AXI_HP2_bresp(hp2_bresp), .S_AXI_HP2_bvalid(hp2_bvalid), .S_AXI_HP2_bready(hp2_bready),
+        .S_AXI_HP2_arid(hp2_arid), .S_AXI_HP2_araddr(hp2_araddr), .S_AXI_HP2_arlen(hp2_arlen),
+        .S_AXI_HP2_arsize(hp2_arsize), .S_AXI_HP2_arburst(hp2_arburst), .S_AXI_HP2_arlock(hp2_arlock),
+        .S_AXI_HP2_arcache(hp2_arcache), .S_AXI_HP2_arprot(hp2_arprot), .S_AXI_HP2_arqos(hp2_arqos),
+        .S_AXI_HP2_arvalid(hp2_arvalid), .S_AXI_HP2_arready(hp2_arready),
+        .S_AXI_HP2_rid(hp2_rid), .S_AXI_HP2_rdata(hp2_rdata), .S_AXI_HP2_rresp(hp2_rresp),
+        .S_AXI_HP2_rlast(hp2_rlast), .S_AXI_HP2_rvalid(hp2_rvalid), .S_AXI_HP2_rready(hp2_rready),
+        .S_AXI_HP3_awid(hp3_awid), .S_AXI_HP3_awaddr(hp3_awaddr), .S_AXI_HP3_awlen(hp3_awlen),
+        .S_AXI_HP3_awsize(hp3_awsize), .S_AXI_HP3_awburst(hp3_awburst), .S_AXI_HP3_awlock(hp3_awlock),
+        .S_AXI_HP3_awcache(hp3_awcache), .S_AXI_HP3_awprot(hp3_awprot), .S_AXI_HP3_awqos(hp3_awqos),
+        .S_AXI_HP3_awvalid(hp3_awvalid), .S_AXI_HP3_awready(hp3_awready),
+        .S_AXI_HP3_wid(hp3_wid), .S_AXI_HP3_wdata(hp3_wdata), .S_AXI_HP3_wstrb(hp3_wstrb),
+        .S_AXI_HP3_wlast(hp3_wlast), .S_AXI_HP3_wvalid(hp3_wvalid), .S_AXI_HP3_wready(hp3_wready),
+        .S_AXI_HP3_bid(hp3_bid), .S_AXI_HP3_bresp(hp3_bresp), .S_AXI_HP3_bvalid(hp3_bvalid), .S_AXI_HP3_bready(hp3_bready),
+        .S_AXI_HP3_arid(hp3_arid), .S_AXI_HP3_araddr(hp3_araddr), .S_AXI_HP3_arlen(hp3_arlen),
+        .S_AXI_HP3_arsize(hp3_arsize), .S_AXI_HP3_arburst(hp3_arburst), .S_AXI_HP3_arlock(hp3_arlock),
+        .S_AXI_HP3_arcache(hp3_arcache), .S_AXI_HP3_arprot(hp3_arprot), .S_AXI_HP3_arqos(hp3_arqos),
+        .S_AXI_HP3_arvalid(hp3_arvalid), .S_AXI_HP3_arready(hp3_arready),
+        .S_AXI_HP3_rid(hp3_rid), .S_AXI_HP3_rdata(hp3_rdata), .S_AXI_HP3_rresp(hp3_rresp),
+        .S_AXI_HP3_rlast(hp3_rlast), .S_AXI_HP3_rvalid(hp3_rvalid), .S_AXI_HP3_rready(hp3_rready)
     );
 
 endmodule

@@ -1,0 +1,18 @@
+# artefactos de Vivado (el build es reproducible con build.tcl)
+vivado_prj*/
+*.log
+*.jou
+*.rpt
+*.bit
+*.backup.*
+ps7_init*.tcl
+.Xil/
+*.out
+*.img
+# --- companion ARM (bare-metal): productos de build y el clon de TinyUSB (arm/get_tinyusb.sh) ---
+arm/*/build/
+*.elf
+*.map
+*.o
+arm/tinyusb/
+ruvector.db

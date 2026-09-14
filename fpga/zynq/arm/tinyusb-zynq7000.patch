@@ -1,0 +1,13 @@
+diff --git a/src/portable/chipidea/ci_hs/hcd_ci_hs.c b/src/portable/chipidea/ci_hs/hcd_ci_hs.c
+index 0f24f5b..3b4097a 100644
+--- a/src/portable/chipidea/ci_hs/hcd_ci_hs.c
++++ b/src/portable/chipidea/ci_hs/hcd_ci_hs.c
+@@ -50,6 +50,8 @@ bool hcd_dcache_clean_invalidate(const void *addr, uint32_t data_size) {
+ 
+   #include "ci_hs_rw61x.h"
+ 
++#elif defined(CI_HS_ZYNQ7000)
++  #include "ci_hs_zynq.h"          // MSXimus: Zynq-7000 USB0 (ChipIdea + ULPI USB3320)
+ #else
+   #error "Unsupported MCUs"
+ #endif
