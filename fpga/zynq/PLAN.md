@@ -95,8 +95,15 @@ reproduce los 25 pines ya validados):
 | 19 | V16 (18P) | 20 | P16 (24N) | | | | | |
 
 Asignación MSXimus: **microSD = pines 31‑36** (dat2 U20 · dat3 P18 · cmd T20 ·
-sclk N18 · dat0 P20 · dat1 N20; GND 37, 3V3 39), ya en `top_zynq.xdc`.
-Pendientes: 4 × USB (usb1/2 dp/dn) y 3 × ESP32‑C6 (tx/rx/turbo) en el resto.
+sclk N18 · dat0 P20 · dat1 N20; GND 37, 3V3 39), en `top_zynq_sd.xdc` (hoy sin uso:
+la SD real la sirve el ARM; queda como alternativa sin software).
+**ESP32 (C6 o S3) = pines 26/28/30** (`top_zynq_esp.xdc`, 14/09): 26 W16 `esp_rx_i`
+← TX del ESP · 28 R18 `esp_tx_o` → RX del ESP · 30 P19 `esp_turbo_o` → GPIO del ESP;
+GND en 37/38, alimentación por el USB del módulo o 5 V del pin 2 al VIN. Mismos tres
+hilos que el J10 de la Tang (C6: IO16/IO17/GPIO3; S3 1732S019: GPIO40/GPIO39/GPIO41),
+así que cualquiera de los dos se pincha sin tocar el PL. La UART va al `wifi_lite`
+(I/O 06/07h) a 27M/31 baud desde `clk_27m`, igual que en la Tang.
+Los 4 × USB del PL ya no hacen falta (el USB es el P3 del PS).
 
 ## E. Orden de trabajo
 1. ✅ `memory_axi.v` + cliente sintético en placa (13/09: 0 errores, hit = 222 ns).
@@ -229,6 +236,10 @@ Pendientes: 4 × USB (usb1/2 dp/dn) y 3 × ESP32‑C6 (tx/rx/turbo) en el resto.
    🏆 14:45 **VALIDADO en BASIC con el bit corregido**: las escrituras al reg. 15 son ahora
    `CF 8F` (bit 5 quieto); `hid.tcl mouse -8 12` → `PAD(17)=-2 PAD(18)=3` (÷4 y signo MSX);
    mandos con el `assign` corregido: UP→1, DOWN→5, LEFT→7, RIGHT→3, A→`STRIG(1)`=−1.
+   ⚠️ 15:45: otra sesión leyó el firmware del BL616 (usb_gamepad.cpp:337): la CRUCETA izq/der va
+   en los bits **6/7** y los hombros L/R en 10/11 (el comentario del top.v estaba al revés); mi
+   fix solo había girado arriba/abajo. `top.v`, `hid_pad.c`, `hid.tcl` y los tests ya con 6/7;
+   build `build_dpad.out` para validar izq/der con `hid.tcl joy1 0x40/0x80`.
    Queda probarlo con teclado/ratón/mando USB reales en P3 (Albert, esta noche).
 4c. 🔨 13:15 **PÁGINA DE INFORMACIÓN (OSD) — pedido por Albert para ver la temperatura al poner
    el disipador esta noche**: el companion hace de BL616 con el protocolo de `iosys_bl616`
@@ -250,5 +261,48 @@ Pendientes: 4 × USB (usb1/2 dp/dn) y 3 × ESP32‑C6 (tx/rx/turbo) en el resto.
    `char[]` de la página → `-mno-unaligned-access` en `build.sh` (protege a todo el companion).
    Más adelante: turbo y más datos (Albert). Pendiente de HW: F12 con el teclado USB.
 5. Audio, SCC, OPL4 (ondas por `wv`), ESP32.
+   - ✅ 14/09 pines del ESP32 en el header (CAM1 26/28/30, `top_zynq_esp.xdc`, sección D).
+     Albert tiene un S3 (1732S019) parado y las C6 en uso: para la Zynq basta el WiFi UNAPI
+     (la pantalla la hace el OSD del ARM y el turbo lo lleva el menú), así que el S3 vale
+     con su firmware de UART validado el 22/08; si más adelante se pincha un C6, mismo cable.
+   - 🔜 OPL4 tabla de ondas: `wave_axi.v` sobre `S_AXI_GP0` (o HP2 compartido), reloj de
+     37,5 MHz, `boot.tcl` carga `yrw801.rom` en la DDR. Empieza la noche del 14/09.
+   - 🔜 **Cinta TSX, pendiente TRAS el ESP32 y las descargas**: el `.tsx` vive en la SD
+     (lo baja el File‑Hunter por el C6/S3 o se copia), el ARM lo convierte (port de
+     `tsx2cvs`) y alimenta `cas_stream.v` (KCS, validado en el MSXnano) por una FIFO en
+     la DDR vía el buzón — sin UART ni pines extra; bit de cinta al reg. 14 del PSG (bit 7),
+     motor por PC4 del PPI (OUT 0ABh). Menú: tecla T / pulsar un `.tsx` en el navegador,
+     con opción de arrancar BASIC sin Nextor (algunos cargadores chocan con él).
+     Piezas: `tsx2rom/` (conversor + `cas_player.v`), rama `cinta-virtual` del MSXnano
+     (`cas_stream.v`, `tape_uart.v`), firmware rama `msxnano` (`tsx2cvs.cpp`, TapeWeb),
+     API de tsx.eslamejor (catálogo JSON + descarga directa).
+   - 🔜 **V9990 (tiny9990)** — apuntado 14/09; se empieza cuando esté probado lo pendiente
+     (ondas OPL4, ESP32, USB real, BOOT.bin). Orden acordado: fase 1 del V9990 ANTES que la
+     cinta TSX (luce más y ya hay software de prueba).
+     Core: tiny9990 de buppu3 (tnCart) en el port de herraa1, `_recursos/tnCartWonder/rtl/src/
+     peripheral/video/tiny9990/` (BSD‑3, 9.700 líneas SV). Descartado en la 60K el 31/07 por
+     área; en la Zynq cabe de sobra: ~5.000‑6.000 LUT6 y ~11 BRAM con blitter (medido en Gowin
+     9.569 lógica / 21 BSRAM) sobre 33.000 LUT6 y 73 BRAM libres.
+     · Tiene: P1/P2, B1 256×212, B2 384×240, B3 512×212, B4 768×240, 2/4/8/16 bpp, YJK/YUV,
+       paleta, sprites/cursores, interlace, blitter completo con LOGOP (msx‑samurai, ejemplos
+       V9990 de MSXgl y la tech‑demo de TINY funcionan).
+     · Le falta (README de buppu3): B5 640×400 y B6 640×480 (`CLK_25M_EN` "sin soporte";
+       constantes H640 ya en `t9990_timing.sv`), B0 192×240, EOR del cursor, R#16 (ajuste de
+       pantalla), ROM kanji (`ToDo` en `t9990_blit.sv:591`).
+     · Integración Zynq: interfaz T9990 = CPU (CSR_n/CSW_n/MODE[3:0]/CD, WAIT_n, INT0/1) en
+       los puertos 60h‑6Fh; VRAM 512 KB por cliente AXI propio (ADDR[18:0], datos 32 bits,
+       DIN_SIZE 8/32, REQ/ACK_n, RFSH) con la receta prefetch+caché del V9968 (pico 86 MB/s);
+       reloj: CLK maestro con enables 21M/14M → `clk_86` (85,909 = 4 × 21,477) ya existe;
+       25M para B5/B6 aparte. Salida: HS/VS/RGB555/Ys/DCLK_EN, 720×480 a 27 MHz.
+     · Una sola HDMI: SEGUNDA instancia de `msx2hdmi_v9968` para el V9990 (~12 BRAM) y
+       selector en el dominio del HDMI que conmuta en VSYNC. Mando del selector: KEY2 de la
+       placa (tras el boot está libre: hoy solo rescate al arrancar + pulso de debug) y luego
+       combinación de teclas del USB / OSD por el buzón del ARM. Con Ys en el mismo mux sale el
+       modo **Video9000** (superposición MSX ⇄ V9990) casi gratis.
+     · "Todos los modos" en dos fases: fase 1 = port tal cual (B1‑B4, P1/P2, blitter) +
+       conmutador (~1 semana de builds); fase 2 = B5/B6 (400/480 líneas nativas: no caben en
+       el ring de 288 → salida 480p 1:1 o, mejor, framebuffer en DDR con scanout propio a
+       720p, que da también PiP), B0, cursor EOR, R#16 (un día cada uno), kanji (JIS1 del pack
+       en la DDR, 1‑2 días). Software de prueba: msx‑samurai, MSXgl V9990, demo de TINY.
 6. PS: FSBL + app que cargue packs de QSPI/SD y haga de BL616 (USB host,
    menú). Ahí entra el SDK (instalación offline desde el .tar.gz).

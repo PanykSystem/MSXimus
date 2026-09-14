@@ -105,6 +105,12 @@ rep_span("module top\n", r"^\);[ \t]*\n", '''module top_zynq
     output wire        sd_dat2,        // U20 (CAM1-31)
     output wire        sd_dat3,        // P18 (CAM1-32)
 
+    // ESP32 (C6 o S3): WiFi UNAPI por UART (wifi_lite, I/O 06/07h, 27M/31 baud) + aviso
+    // de turbo. Mismos 3 hilos que el J10 de la Tang. CAM1 26/28/30 (top_zynq_esp.xdc).
+    input  wire        esp_rx_i,       // W16 (CAM1-26) <- TX del ESP (PULLUP: reposo sin modulo)
+    output wire        esp_tx_o,       // R18 (CAM1-28) -> RX del ESP
+    output wire        esp_turbo_o,    // P19 (CAM1-30) -> GPIO del ESP (estado del turbo)
+
     // ---- PS7: DDR3 + MIO (pines fijos del PS, sin .xdc) ----
     inout  wire [14:0] DDR_addr,
     inout  wire [2:0]  DDR_ba,
@@ -145,9 +151,7 @@ rep_span("module top\n", r"^\);[ \t]*\n", '''module top_zynq
     wire spi_dir, spi_irqn;
     wire bl616_jtagsel;               // = RX de la UART del iosys <- UART0 del PS (EMIO): el ARM hace de BL616
     wire jtagseln, iosys_uart_tx;     // iosys_uart_tx -> UART0_RX del PS
-    // ESP32-C6 (WiFi): pendiente de 3 pines del header (PLAN.md D)
-    wire esp_rx_i = 1'b1;
-    wire esp_tx_o, esp_turbo_o;
+    // (ESP32: puertos reales esp_* en el header CAM1 26/28/30, ver cabecera)
     // LEDs del Tang (6, activos a 0) -> 4 de la placa (activos a 1)
     wire [5:0] led;
     assign led_z = ~led[3:0];

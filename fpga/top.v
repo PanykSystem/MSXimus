@@ -2383,26 +2383,35 @@ assign keyboard_addr = ppi_port_c[3:0];
 
     // ---- gamepads USB del BL616 -> puertos de joystick del MSX -------------
     // El MCU manda el estado de los mandos con el comando 9. El formato lo dice
-    // usb_gamepad.cpp: "SNES: R L X A RT LT DN UP ST SE Y B", o sea bit 11 -> 0.
-    // 🚨 NO es el mismo mapa que usa joy_choice para el menu: alli las flechas
-    // izquierda/derecha son los bits 6/7 (los gatillos, que hacen de pagina
-    // anterior/siguiente), mientras que la CRUCETA de verdad son los bits 10/11.
-    // Confundirlos deja los mandos girados 90 grados.
+    // usb_gamepad.cpp: "SNES: R L X A RT LT DN UP ST SE Y B", o sea bit 11 -> 0:
+    //     bit 4 arriba · 5 abajo · 6 izquierda · 7 derecha   (la CRUCETA)
+    //     bit 8 A · 9 X · 0 B · 1 Y · 2 Select · 3 Start
+    //     bit 10 L · 11 R                                    (los HOMBROS)
+    // Comprobado en el firmware, no en el comentario: hidparser.cpp mete
+    // right/left/down/up en los bits 0..3 del byte joy y usb_gamepad.cpp:337
+    // los sube a 7/6/5/4; los botones 5 y 6 (hombros) van a 10/11. Y es el
+    // MISMO mapa que usa joy_choice para el menu del MCU (izquierda/derecha =
+    // pagina anterior/siguiente = bits 6/7; kbd_to_joy pone ahi las flechas).
     //
     // Nuestro joystick0/1: [3]=arriba [2]=abajo [1]=izq [0]=der (asi lo consume
     //                      joy0_msx: PSG bit0=arriba=~joystick0[3] ... bit3=der=~joystick0[0])
     //                      [4]=disparo A [5]=disparo B [6]/[7]=autofire
-    // 🚨 14/09: estaba escrito como [0]=arriba y los mandos salian girados 180 grados
-    // (medido en la Zynq por el buzon HID: DN daba izquierda, L abajo, R arriba).
+    // 🚨 Historia: desde la v3.1 (25/08) esto estaba escrito como [0]=arriba
+    // y con la cruceta en los bits 10/11: en la Console 60K arriba/abajo daban
+    // derecha/izquierda, izquierda/derecha no hacian NADA y los hombros movian
+    // arriba/abajo. El 14/09 se giro arriba/abajo (cazado en la Zynq) pero se
+    // dejo la cruceta en 10/11, que en el BL616 son los hombros; corregido el
+    // mismo dia leyendo el firmware. El companion de la Zynq (hid_pad.c) sigue
+    // este mismo formato.
     wire [15:0] mcu_hid1, mcu_hid2;
     assign joystick0 = { mcu_hid1[9],  mcu_hid1[1],    // autofire  <- X, Y
                          mcu_hid1[0],  mcu_hid1[8],    // TrigB/A   <- B, A
                          mcu_hid1[4],  mcu_hid1[5],    // [3] arriba / [2] abajo
-                         mcu_hid1[10], mcu_hid1[11] }; // [1] izq    / [0] der
+                         mcu_hid1[6],  mcu_hid1[7] };  // [1] izq    / [0] der
     assign joystick1 = { mcu_hid2[9],  mcu_hid2[1],
                          mcu_hid2[0],  mcu_hid2[8],
                          mcu_hid2[4],  mcu_hid2[5],
-                         mcu_hid2[10], mcu_hid2[11] };
+                         mcu_hid2[6],  mcu_hid2[7] };
 
     iosys_bl616 #(
         .FREQ      (27_000_000),      // dominio de clk_27m; el baud (2 Mbps) lo

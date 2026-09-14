@@ -1,7 +1,7 @@
 # hid.tcl — escribe a mano el buzon HID del companion (MBOX+0x10..) para probar el lado
 # PL (dbg_mailbox_axi -> mcu_hid1/2 y msx_mouse) sin USB: lo mismo que haria el ARM.
 #   xsdb.bat tools/hid.tcl joy1 <hex16>            palabra SNES del jugador 1 (bit 4 UP, 5 DOWN,
-#   xsdb.bat tools/hid.tcl joy2 <hex16>            10 LEFT, 11 RIGHT, 8 A, 0 B, 9 X, 1 Y, ...)
+#   xsdb.bat tools/hid.tcl joy2 <hex16>            6 LEFT, 7 RIGHT, 8 A, 0 B, 9 X, 1 Y, 10 L, 11 R)
 #   xsdb.bat tools/hid.tcl mouse <dx> <dy> [btn]   suma dx/dy a los acumulados (int16) y sube seq
 #   xsdb.bat tools/hid.tcl show
 set MBOX 0x1FF00000

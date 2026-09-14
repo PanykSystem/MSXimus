@@ -2,8 +2,12 @@
  * (items cortos, HID 1.11) que localiza en el informe de ENTRADA:
  *   Generic Desktop (pag. 0x01): X 0x30, Y 0x31, Hat switch 0x39
  *   Button (pag. 0x09): botones 1..16
- * y los convierte a la palabra SNES que espera el top (misma que el BL616).
- * Botones -> SNES: 1 A, 2 B, 3 X, 4 Y, 5 LT, 6 RT, 7 SEL, 8 START (los mandos
+ * y los convierte a la palabra SNES que espera el top (misma que el BL616):
+ *   bit 4 arriba, 5 abajo, 6 izquierda, 7 derecha (cruceta), 8 A, 9 X, 0 B, 1 Y,
+ *   2 Select, 3 Start, 10 L, 11 R (hombros). Sacado de usb_gamepad.cpp:337 del
+ *   firmware del BL616 (14/09: antes la cruceta izq/der iba en 10/11, que son los
+ *   hombros; el top.v de la Tang lee 6/7 y con eso los mandos van igual en las dos).
+ * Botones -> SNES: 1 A, 2 B, 3 X, 4 Y, 5 L, 6 R, 7 SEL, 8 START (los mandos
  * "SNES USB" baratos traen X,A,B,Y,L,R,Sel,Start en ese orden: queda X->A y A->B,
  * o sea disparo A/B del MSX en los dos botones de la derecha; jugable igual).
  * Ejes: < 25 % del recorrido = izq/arriba, > 75 % = der/abajo. Hat: 0..7 desde arriba. */
@@ -153,11 +157,11 @@ int hid_pad_report(uint8_t dev, uint8_t idx, const uint8_t *rep, uint16_t len, u
     }
     if (dy < 0) w |= 1u << 4;
     if (dy > 0) w |= 1u << 5;
-    if (dx < 0) w |= 1u << 10;
-    if (dx > 0) w |= 1u << 11;
-    /* boton 1..10 -> A B X Y LT RT y luego SEL START (8 botones) o LT RT SEL START (10+: L2/R2 hacen de hombro) */
-    static const uint8_t map8[8]   = { 8, 0, 9, 1, 6, 7, 2, 3 };
-    static const uint8_t map10[10] = { 8, 0, 9, 1, 6, 7, 6, 7, 2, 3 };
+    if (dx < 0) w |= 1u << 6;
+    if (dx > 0) w |= 1u << 7;
+    /* boton 1..10 -> A B X Y L R y luego SEL START (8 botones) o L R SEL START (10+: L2/R2 hacen de hombro) */
+    static const uint8_t map8[8]   = { 8, 0, 9, 1, 10, 11, 2, 3 };
+    static const uint8_t map10[10] = { 8, 0, 9, 1, 10, 11, 10, 11, 2, 3 };
     const uint8_t *map = p->nbtn >= 10u ? map10 : map8;
     uint8_t nmap = p->nbtn >= 10u ? 10u : 8u;
     for (uint8_t b = 0; b < nmap && b < p->nbtn; b++)

@@ -151,7 +151,7 @@ El grupo clásico pasa por una ganancia maestra ajustable de 0 a 7 por el puerto
 
 ## 8. Periféricos
 
-- **Teclado, ratón y mando USB**. Dos instancias del host USB HID en el fabric, con un PLL de 12 MHz propio, sin hub. El teclado se traduce a la matriz del MSX; el ratón se presenta por el puerto de joystick como un ratón MSX; el mando va al registro 14 del PSG, con autodisparo en los botones 3 y 4.
+- **Teclado, ratón y mando USB**. Teclado y ratón, por los dos USB-A: dos instancias del host USB HID en el fabric, con un PLL de 12 MHz propio, sin hub. El teclado se traduce a la matriz del MSX; el ratón se presenta por el puerto de joystick como un ratón MSX. Los mandos no pasan por ese host: los lee el BL616 por su USB-C, con hub, y llegan por la UART del panel (comando 9, la palabra de doce bits del formato SNES: 4 arriba, 5 abajo, 6 izquierda, 7 derecha, 8 A, 0 B, 10 y 11 los hombros); van al registro 14 del PSG, con autodisparo en los botones 3 y 4.
 - **Reloj de tiempo real** en B4-B5, alimentado por el reloj del sistema.
 - **Fuente kanji** por los puertos D8-DB, con los 256 KB de JIS1 y JIS2 en la SDRAM.
 - **S1990 del turbo R** en E4-E7: la máquina se identifica como turbo R y la rutina CHGCPU de la BIOS mueve el turbo. No hay R800.

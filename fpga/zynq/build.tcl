@@ -79,6 +79,7 @@ lappend vh $fpga/tn_vdp_v3_v9958/src/vdp/vdp_package.vhd
 add_files $vh
 
 add_files -fileset constrs_1 $here/top_zynq.xdc
+add_files -fileset constrs_1 $here/top_zynq_esp.xdc
 # microSD en el header: sus pines van aparte; ZYNQ_NO_SD=1 (biseccion) deja los sd_* en tie-off
 if {!([info exists ::env(ZYNQ_NO_SD)] && $::env(ZYNQ_NO_SD) eq "1")} {
     add_files -fileset constrs_1 $here/top_zynq_sd.xdc

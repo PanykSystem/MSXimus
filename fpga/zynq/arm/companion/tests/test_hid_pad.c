@@ -1,4 +1,5 @@
-/* test_hid_pad.c — prueba en el PC del parser de mandos del companion (hid_pad.c): tests/run.sh */
+/* test_hid_pad.c — prueba en el PC del parser de mandos del companion (hid_pad.c): tests/run.sh
+ * Palabra SNES del BL616: bit 4 arriba, 5 abajo, 6 izquierda, 7 derecha, 8 A, 0 B, 9 X, 1 Y, 2 SEL, 3 START, 10 L, 11 R */
 #include <stdio.h>
 #include <string.h>
 #include "hid_pad.h"
@@ -67,9 +68,9 @@ int main(void)
     unsigned char dr_b1[8]    = {0x01,0x7F,0x7F,0x7F,0x7F,0x1F,0x00,0x00};   /* boton 1 = bit 44 = byte5 bit4 */
     unsigned char dr_b2_10[8] = {0x01,0x7F,0x7F,0x7F,0x7F,0x2F,0x20,0x00};   /* boton 2 (bit 45) + boton 10 (bit 53 = byte6 bit5) */
     check("dragonrise reposo", 1, dr_idle, 8, 0x0000);
-    check("dragonrise izquierda (X=0)", 1, dr_left, 8, 0x0400);
+    check("dragonrise izquierda (X=0)", 1, dr_left, 8, 0x0040);
     check("dragonrise abajo (Y=FF)", 1, dr_down, 8, 0x0020);
-    check("dragonrise hat arriba-derecha", 1, dr_hatur, 8, 0x0810);
+    check("dragonrise hat arriba-derecha", 1, dr_hatur, 8, 0x0090);
     check("dragonrise boton 1 -> A", 1, dr_b1, 8, 0x0100);
     check("dragonrise boton 2 -> B, 10 -> START", 1, dr_b2_10, 8, 0x0009);
 
@@ -78,9 +79,9 @@ int main(void)
     unsigned char s_b1_7[3] = {0x80,0x80,0x41};                                /* botones 1 y 7 -> A + SEL */
     unsigned char s_right[3]= {0xFF,0x80,0x00};
     check("simple8 reposo", 2, s_idle, 3, 0x0000);
-    check("simple8 arriba-izquierda", 2, s_ul, 3, 0x0410);
+    check("simple8 arriba-izquierda", 2, s_ul, 3, 0x0050);
     check("simple8 botones 1 y 7", 2, s_b1_7, 3, 0x0104);
-    check("simple8 derecha", 2, s_right, 3, 0x0800);
+    check("simple8 derecha", 2, s_right, 3, 0x0080);
 
     printf("umount dragonrise: %d\n", hid_pad_umount(1, 0));
     printf("mount ds4like: jugador %d\n", hid_pad_mount(4, 0, ds4like, sizeof ds4like));
@@ -103,8 +104,8 @@ int main(void)
     unsigned char g_dr[3]   = {0x60,0x7F,0x00};        /* +96, +127 */
     unsigned char g_b4[3]   = {0x00,0x00,0x08};        /* boton 4 -> Y */
     check("signed4 reposo", 5, g_idle, 3, 0x0000);
-    check("signed4 arriba-izquierda", 5, g_ul, 3, 0x0410);
-    check("signed4 abajo-derecha", 5, g_dr, 3, 0x0820);
+    check("signed4 arriba-izquierda", 5, g_ul, 3, 0x0050);
+    check("signed4 abajo-derecha", 5, g_dr, 3, 0x00A0);
     check("signed4 boton 4 -> Y", 5, g_b4, 3, 0x0002);
 
     printf(fails ? "\n%d FALLOS\n" : "\nTODO OK\n", fails);
