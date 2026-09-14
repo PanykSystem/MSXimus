@@ -47,6 +47,13 @@ module memory_axi #(
     input  wire [22:0] ram_addr,
     output reg  [7:0]  ram_dout,
     output reg         ram_busy,
+    // ram_slow: SOLO los accesos LARGOS (fallo de cache que va a la DDR). Los aciertos
+    // entregan en el mismo instante que la SDRAM del Tang, asi que a 3,58 MHz no hacen
+    // falta esperas: top_zynq arma el /WAIT con ram_slow fuera de turbo y con ram_busy
+    // en turbo. Antes usaba ram_busy siempre y frenaba TODAS las lecturas: el Z80 se
+    // quedaba en 2,95 MHz (83% de un MSX real, benchmark de NataliaPC, 14/09) porque el
+    // reanudado se cuantiza al flanco de 3,58 y cada acceso pagaba hasta un T-state.
+    output reg         ram_slow,
 
     // ---- telemetria ----
     output reg  [31:0] dbg_hits,
@@ -189,7 +196,7 @@ module memory_axi #(
 
     always @(posedge clk_54m) begin
         if (!bus_reset_n || !aresetn) begin
-            seq <= 3'd0; ram_busy <= 1'b0; ram_dout <= 8'd0;
+            seq <= 3'd0; ram_busy <= 1'b0; ram_slow <= 1'b0; ram_dout <= 8'd0;
             op_addr <= 23'd0; op_we <= 1'b0; op_din <= 8'd0; miss_wait <= 1'b0; filled <= 1'b0; w_issued <= 1'b0;
             hit_line <= 128'd0;
             cd_raddr <= {LINES_LOG{1'b0}}; cd_we <= 1'b0; cd_waddr <= {LINES_LOG{1'b0}};
@@ -253,6 +260,13 @@ module memory_axi #(
                 seq <= 3'd2;                            // cd_q/ct_q validos en seq2
             end
             3'd2: begin
+                // aviso TEMPRANO de acceso largo: en cuanto se sabe que la lectura no
+                // acierta (ct_q/cd_q son validos aqui, ~2 ciclos de 54 MHz tras aceptar
+                // la peticion, muy dentro del primer T-state) y hasta que se entrega en
+                // seq3. Cubre tambien el rato esperando a poder emitir el AR.
+                if (!op_we && !filled &&
+                    !(ct_q[TAG_W] && ct_q[TAG_W-1:0] == op_addr[22:LINES_LOG+4]))
+                    ram_slow <= 1'b1;
                 if (miss_wait) begin
                     // esperando la linea: llega por el canal R (miss_wait -> 0, filled -> 1)
                 end
@@ -299,6 +313,7 @@ module memory_axi #(
             3'd3: begin
                 ram_dout <= hit_line[byte_off*8 +: 8];
                 ram_busy <= 1'b0;
+                ram_slow <= 1'b0;
                 seq <= 3'd4;
             end
             3'd4: begin

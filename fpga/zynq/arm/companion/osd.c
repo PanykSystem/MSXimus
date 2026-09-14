@@ -158,6 +158,9 @@ static void osd_render(void)
      * (x 26,67 ns), lecturas, escrituras; contadores de 8 bits} */
     p = put_str(pg[14], " OPL4 wave lat "); p = put_u(p, ((tel[8] >> 24) & 0xFFu) * 80u / 3u); p = put_str(p, "ns rd ");
     p = put_u(p, (tel[8] >> 16) & 0xFFu); p = put_str(p, " wr "); p = put_u(p, (tel[8] >> 8) & 0xFFu); *p = 0;
+    /* +0x64 bit 25 = turbo_eff del core: el turbo WSX se conmuta con F11 */
+    p = put_str(pg[16], "CPU "); p = put_str(p, (tel[9] >> 25) & 1u ? "5.37" : "3.58");
+    p = put_str(p, " MHz   F11 turbo"); *p = 0;
     p = put_str(pg[15], "uptime "); p = put_2(p, up / 3600u); *p++ = ':'; p = put_2(p, (up / 60u) % 60u); *p++ = ':'; p = put_2(p, up % 60u);
     p = put_str(p, "  bucle "); p = put_u(p, sb[12] / 1000u); p = put_str(p, "k"); *p = 0;
     put_str(pg[27], "F12 o osd.tcl off: cerrar")[0] = 0;

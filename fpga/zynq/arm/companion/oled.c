@@ -187,5 +187,8 @@ void oled_tick(void)
     p = put_2(p, (up / 60u) % 60u); *p++ = ':'; p = put_2(p, up % 60u); *p = 0;
     oled_text(6, 0, l);
 
+    /* +0x64 bit 25 = turbo_eff del core (F11 lo conmuta) */
+    oled_text(7, 0, ((tel[9] >> 25) & 1u) ? "CPU 5.37MHz" : "CPU 3.58MHz");
+
     oled_flush();
 }

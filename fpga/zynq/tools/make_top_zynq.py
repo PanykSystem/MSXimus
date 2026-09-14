@@ -494,7 +494,7 @@ memory_axi #(.RAM_BASE(32'h1080_0000), .LINES_LOG(12)) mem1 (
     .clk_54m(clk_54m), .bus_reset_n(bus_reset_n),
     .video_dhclk(VideoDHClk), .video_dlclk(VideoDLClk), .cpu_run(cpu_run_r),
     .ram_din(ram_din), .ram_req(ram_req), .ram_write(ram_write), .ram_addr(ram_addr),
-    .ram_dout(ram_dout), .ram_busy(ram_busy),
+    .ram_dout(ram_dout), .ram_busy(ram_busy), .ram_slow(ram_slow),
     .dbg_hits(mem_dbg_hits), .dbg_miss(mem_dbg_miss), .dbg_state(mem_dbg_state), .ready(),
     .aresetn(rst54_n),
     .M_AWID(hp1_awid), .M_AWADDR(hp1_awaddr), .M_AWLEN(hp1_awlen), .M_AWSIZE(hp1_awsize),
@@ -582,12 +582,20 @@ rep("""            STATE_RESET: begin   // reset
                 ff_flash_rd <= 0;
                 ff_rom_wr <= 0;""", label="flash reset (cargador de arranque)")
 
-# ---------------------------------------------------------------- 8. /WAIT con ram_busy sin turbo
+# ---------------------------------------------------------------- 8. /WAIT: fallos de cache
+# ram_slow lo saca memory_axi; se declara junto a ram_busy (top.v ya usa estas senales
+# antes de declararlas, como el resto de ram_*).
+rep("    reg ram_busy;\n",
+    "    reg ram_busy;\n    wire ram_slow;      // ZYNQ (memory_axi): 1 solo en los accesos LARGOS (fallo de cache)\n",
+    label="decl ram_slow")
 rep("""                    if ( ram_write == 1 || (turbo_eff == 1 && bus_mreq_n == 0 && bus_rd_n == 0 && ram_busy == 1) || (ex_bus_iorq_n == 0)&& (bus_rd_n == 0 || bus_wr_n == 0) ) begin  // P2: sin Compatible Mode (= v1.9 nano)""",
 """`ifdef ZYNQ
-                    // ZYNQ: un fallo de cache de memory_axi tarda mas que un T-state
-                    // tambien a 3,58: el termino ram_busy de las lecturas SIEMPRE
-                    if ( ram_write == 1 || (bus_mreq_n == 0 && bus_rd_n == 0 && ram_busy == 1) || (ex_bus_iorq_n == 0)&& (bus_rd_n == 0 || bus_wr_n == 0) ) begin
+                    // ZYNQ: en turbo frena CUALQUIER lectura de RAM (como el Tang con su
+                    // SDRAM), pero a 3,58 SOLO los accesos largos (ram_slow = fallo de
+                    // cache). Un acierto de memory_axi entrega en el mismo instante que
+                    // entregaba la SDRAM, asi que a 3,58 no necesita espera ninguna.
+                    // Con ram_busy aqui, el Z80 se quedaba en 2,95 MHz (14/09).
+                    if ( ram_write == 1 || (bus_mreq_n == 0 && bus_rd_n == 0 && (turbo_eff ? ram_busy : ram_slow) == 1) || (ex_bus_iorq_n == 0)&& (bus_rd_n == 0 || bus_wr_n == 0) ) begin
 `else
                     if ( ram_write == 1 || (turbo_eff == 1 && bus_mreq_n == 0 && bus_rd_n == 0 && ram_busy == 1) || (ex_bus_iorq_n == 0)&& (bus_rd_n == 0 || bus_wr_n == 0) ) begin  // P2: sin Compatible Mode (= v1.9 nano)
 `endif""", label="wait idle")
@@ -596,7 +604,7 @@ rep("""                    if ( (turbo_eff ? clk_falling_5m4_54 : clk_falling_3m
                         wait_io_ff <= 1;""",
 """                    if ( (turbo_eff ? clk_falling_5m4_54 : clk_falling_3m6_54) == 1 && (
 `ifdef ZYNQ
-                         ram_busy == 0
+                         (turbo_eff ? ram_busy : ram_slow) == 0
 `else
                          turbo_eff == 0 || ram_busy == 0
 `endif
@@ -757,8 +765,8 @@ s += '''
                      clock_locked, vddr_ready, iosys_frz, cpu_run_r, sd_card_type_w, sd_card_stat_w}),
         .tel_dbg(mem_dbg_state),
         .tel_dbg2({sd_ram_blocks, sdio_count, sd_timeout_error_w, sd_crc_error_w, sd_rcrc_error_w, ff_sd_init, sd_card_stat_w}),
-        // +0x60: raton y mandos (buzon HID): {present, port2, strobe, phase[2:0], 2'b0}, dx, dy, informes | data, joy0, joy1, 0
-        .tel_dbg3({msx_mouse_present, psg_reg15_port2, psgPB[5], msx_mouse_phase, 2'b00, mb_mouse_dx, mb_mouse_dy, mb_rep_cnt}),
+        // +0x64: raton y mandos (buzon HID): {present, port2, strobe, phase[2:0], turbo_eff, 0}, dx, dy, informes
+        .tel_dbg3({msx_mouse_present, psg_reg15_port2, psgPB[5], msx_mouse_phase, turbo_eff, 1'b0, mb_mouse_dx, mb_mouse_dy, mb_rep_cnt}),
         .tel_dbg4({wave_tel, r15_cnt}),     // +0x60: {lat_max AR->R (ciclos 37,5 MHz), lecturas, escrituras} de wave_axi + cuenta r15
         .M_AWID(hp2_awid), .M_AWADDR(hp2_awaddr), .M_AWLEN(hp2_awlen), .M_AWSIZE(hp2_awsize),
         .M_AWBURST(hp2_awburst), .M_AWLOCK(hp2_awlock), .M_AWCACHE(hp2_awcache), .M_AWPROT(hp2_awprot),
