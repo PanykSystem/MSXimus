@@ -199,6 +199,7 @@ module top_zynq
     wire [15:0] joy1_mbox, joy2_mbox; // joysticks USB del companion (formato SNES del BL616), clk_54m
     wire [7:0]  mb_mouse_btn, mb_mouse_dx, mb_mouse_dy;   // raton USB del companion: delta por informe
     wire        mb_mouse_rep;         // pulso clk_54m: nuevo informe de raton
+    wire        mb_msx_run;           // MBOX+0x1C bit 0: 0 = MSX en reset hasta que el pack este en la DDR
     // HP3 = proxy de sectores "SD" (zynq/sd_axi_proxy.v) a clk_27m
     wire [5:0]  hp3_awid;   wire [31:0] hp3_awaddr;  wire [3:0] hp3_awlen;   wire [2:0] hp3_awsize;
     wire [1:0]  hp3_awburst, hp3_awlock; wire [3:0] hp3_awcache; wire [2:0] hp3_awprot; wire [3:0] hp3_awqos;
@@ -272,7 +273,7 @@ end
     // muerto 2026-07-07/08). Normalizamos a "press" activo-alto:
     wire s1_press = ~s1;
     wire s2_press = ~s2;
-    assign ex_bus_reset_n = ~s1_press && clock_locked;   // s1 pulsado = reset
+    assign ex_bus_reset_n = ~s1_press && clock_locked && mb_msx_run;   // s1 pulsado = reset; ZYNQ: + MSX_RUN del buzon
 
 
     // 108 MHz / 30 = 3.6 MHz internal CPU clock (replaces ex_bus_clk_3m6 pin)
@@ -6261,6 +6262,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .kbd_mbox(kbd_mbox),
         .joy1(joy1_mbox), .joy2(joy2_mbox),
         .mouse_btn(mb_mouse_btn), .mouse_dx(mb_mouse_dx), .mouse_dy(mb_mouse_dy), .mouse_rep(mb_mouse_rep),
+        .msx_run(mb_msx_run),
         .tel_hits(mem_dbg_hits), .tel_miss(mem_dbg_miss),
         .tel_status({vddr_ops[15:0], sd_mode, sd_irq, sd_busy_w, sd_blk_rdy_w, ff_sd_rstart, ff_sd_wstart,
                      clock_locked, vddr_ready, iosys_frz, cpu_run_r, sd_card_type_w, sd_card_stat_w}),

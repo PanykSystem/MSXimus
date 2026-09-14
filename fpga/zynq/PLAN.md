@@ -187,6 +187,26 @@ Los 4 × USB del PL ya no hacen falta (el USB es el P3 del PS).
    Siguiente: `BOOT.bin` en TF1 (SD0): FSBL (ps7_init) → bitstream del MSXimus → sdproxy, que
    además cargue el pack de BIOS desde un fichero de la tarjeta → arranque autónomo sin PC.
    (Aparcado 14/09 por Albert hasta que ponga una SD en SD0, "esta noche".)
+   🔨 14/09 17:30 **BOOT.bin HECHO sin SDK** (`arm/fsbl/` + `arm/boot/`):
+   - FSBL = el `zynq_fsbl` de Xilinx tal cual (fuentes en `data/embeddedsw` de Vivado) + BSP
+     standalone de esas fuentes + qspips/sdps/xilffs + **devcfg (PCAP) bajado de
+     github.com/Xilinx/embeddedsw xilinx‑v2019.2** (Vivado no lo trae) + `ps7_init.c/h` del bd
+     (el `build.sh` los refresca desde `vivado_prj`). `bsp/xparameters.h` a mano, consola por
+     la UART1 (P1, 115200) con `FSBL_DEBUG_INFO`. 98 KB, cabe en la OCM. Trampas: `boot.S`
+     necesita `-mfpu=vfpv3` aunque el ABI sea soft; `usleep/_init/_fini` y los syscalls de
+     newlib van en `bsp/stubs.c` + `arm/common/gcc/*.c`.
+   - `make_boot.sh` → `bootgen -arch zynq`: [bootloader] fsbl.elf · `zeros.bin`→0x1FF00000
+     (buzón+SDBOX a cero = **MSX_RUN=0**) · `pack.bin`→0x10F00000 · bitstream · companion.elf.
+     El pack viaja DENTRO de BOOT.bin (sin FatFs en el companion). 2,9 MB.
+   - PL: `MSX_RUN` = MBOX+0x1C bit 0 (nuevo en `dbg_mailbox_axi`): `ex_bus_reset_n` lo
+     incluye; `boot.tcl` lo pone a 1 tras cargar el pack; el companion lo pone a 1 tras
+     inicializar la SD (o sea, con BOOT.bin el MSX arranca cuando el proxy ya sirve).
+   - QSPI (16 MB, U15): mismo BOOT.bin; para grabarlo, `program_hw_cfgmem` de Vivado con
+     nuestro FSBL o que el companion se lo copie de la SD (driver qspips). Antes: activar
+     el QSPI en el bd (`PCW_QSPI_PERIPHERAL_ENABLE 1`, MIO 1‑6) para que `ps7_init` lo
+     configure. BOOT switch SW1: ON‑ON = JTAG, ON‑OFF = QSPI, OFF‑OFF = SD (a confirmar).
+   - OLED 0,96" (J4, E18/E19/F16/F17): sin usar; candidata a mostrar temperatura/estado
+     con un maestro I2C/SPI en el PL alimentado por el buzón (futuro).
 4b. 🔨 14/09 12:30 **USB HOST en el ARM** (teclado, ratón y mandos por el USB‑C P3, con hub):
    `arm/companion/` = sdproxy + TinyUSB (clon en `arm/tinyusb/`, master 7b787da; `hcd_ci_hs.c`
    parcheado con `#elif defined(CI_HS_ZYNQ7000)` → `ci_hs_zynq.h`) sobre el USB0 del PS

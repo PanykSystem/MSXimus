@@ -61,6 +61,7 @@ puts "DDR: cabeza [format %08X [lindex $head 0]] [format %08X [lindex $head 1]] 
 #     la DDR arranca con basura y el PL la leeria como teclas pulsadas.
 set MBOX 0x1FF00000
 mwr $MBOX {0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0} 24
+mwr [expr {$MBOX + 0x1C}] 1      ;# MSX_RUN: el pack ya esta en la DDR, el MSX puede arrancar
 
 # 3c) "SD" del MSXimus (sd_axi_proxy, HP3): buzon SDBOX en modo IMAGEN (MODE=0),
 #     tarjeta presente, tamano = la ventana de la imagen (224 MB). Opcionalmente

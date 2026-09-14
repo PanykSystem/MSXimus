@@ -16,3 +16,8 @@ arm/*/build/
 *.o
 arm/tinyusb/
 ruvector.db
+# --- BOOT.bin y sus piezas generadas (pack.bin es el pack de BIOS con copyright) ---
+arm/boot/BOOT.bin
+arm/boot/pack.bin
+arm/boot/zeros.bin
+arm/boot/boot.bif

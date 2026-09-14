@@ -31,6 +31,10 @@ module dbg_mailbox_axi #(
     output reg  [7:0]   mouse_dx,
     output reg  [7:0]   mouse_dy,
     output reg          mouse_rep,              // pulso de un ciclo: nuevo informe de raton
+    // +0x1C: palabra de control del sistema (la escribe boot.tcl o el companion):
+    //   bit 0 = MSX_RUN: mientras sea 0 el MSX queda en reset (el pack aun no esta en la DDR).
+    //   Con BOOT.bin el FSBL carga un bloque de ceros en el buzon -> el MSX espera al companion.
+    output reg          msx_run,
     input  wire [31:0]  tel_hits,
     input  wire [31:0]  tel_miss,
     input  wire [31:0]  tel_status,
@@ -123,6 +127,7 @@ module dbg_mailbox_axi #(
             st <= S_WAIT; tick <= 16'd0; r_beat <= 2'd0; r_lo <= 64'd0; r_hi <= 64'd0; widx <= 3'd0; seq <= 32'd0;
             aw_done <= 1'b0; w_done <= 1'b0; kbd_mbox <= 128'd0;
             joy1 <= 16'd0; joy2 <= 16'd0; mouse_btn <= 8'd0; mouse_dx <= 8'd0; mouse_dy <= 8'd0; mouse_rep <= 1'b0;
+            msx_run <= 1'b0;
             ax_p <= 16'd0; ay_p <= 16'd0; btn_p <= 8'd0;
             M_AWVALID <= 1'b0; M_WVALID <= 1'b0; M_ARVALID <= 1'b0;
             M_AWID <= 6'd0; M_WID <= 6'd0; M_ARID <= 6'd0;
@@ -152,7 +157,8 @@ module dbg_mailbox_axi #(
                     2'd0: r_lo <= M_RDATA;
                     2'd1: begin r_hi <= M_RDATA; kbd_mbox <= {M_RDATA, r_lo}; end
                     2'd2: begin joy1 <= M_RDATA[15:0]; joy2 <= M_RDATA[31:16]; btn_p <= M_RDATA[39:32]; end   // +0x10 joy, +0x14 btn|seq
-                    default: begin                                                                          // +0x18 {ay, ax}
+                    default: begin                                                                          // +0x18 {ay, ax}, +0x1C control
+                        msx_run <= M_RDATA[32];
                         if (ax_n != ax_p || ay_n != ay_p || btn_p != mouse_btn) begin
                             mouse_dx <= cdx; mouse_dy <= cdy; mouse_btn <= btn_p; mouse_rep <= 1'b1;
                             ax_p <= ax_p + {{8{cdx[7]}}, cdx}; ay_p <= ay_p + {{8{cdy[7]}}, cdy};

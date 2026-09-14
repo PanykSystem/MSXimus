@@ -121,6 +121,8 @@ int main(void)
     dsb();
     box[W_MODE] = 1U;                                     /* proxy ON: el PL deja de usar la imagen */
     dsb();
+    *(volatile u32 *)0x1FF0001CU = 1U;                    /* MSX_RUN: con BOOT.bin el MSX esperaba en reset */
+    dsb();
     wake_setup();
     log_str("MODE=1, WFI\n");
     usb_host_init();
