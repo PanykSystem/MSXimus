@@ -70,6 +70,13 @@ if {$wave ne "none"} {
     puts [format "wave: cabeza %08X (YRW801 real: bytes 40 18 00 00 = 00001840 en little-endian)" [lindex $wh 0]]
 }
 
+# 3a2) VRAM del V9968 a cero (DDR 0x10280000, 256 KB): la DDR arranca con basura y toda zona
+#      que un juego no escriba se veia como ruido blanco (Xevious, 14/09). En el Tang nace limpia.
+#      (Con BOOT_PROXY=1 el companion lo hace tambien; aqui cubre el caso sin companion.)
+set VRAM 0x10280000
+mwr -force $VRAM [lrepeat 65536 0] 65536
+puts "VRAM: 256 KB a cero en [format 0x%08X $VRAM]"
+
 # 3b) buzon de depuracion (dbg_mailbox_axi, HP2) a cero ANTES de soltar el PL:
 #     la DDR arranca con basura y el PL la leeria como teclas pulsadas.
 set MBOX 0x1FF00000

@@ -121,6 +121,14 @@ int main(void)
     dsb();
     box[W_MODE] = 1U;                                     /* proxy ON: el PL deja de usar la imagen */
     dsb();
+    /* VRAM del V9968 a cero ANTES de soltar el MSX. Vive en la DDR (VRAM_BASE 0x10000000 +
+     * 0x280000 del shim, 18 bits = 256 KB) y la DDR arranca con basura: cualquier zona que un
+     * juego no escriba se veia como ruido blanco (Xevious, 14/09). En el Tang arranca limpia. */
+    {
+        volatile u32 *vram = (volatile u32 *)0x10280000U;
+        for (u32 i = 0; i < 0x40000U / 4U; i++) vram[i] = 0U;
+        dsb();
+    }
     *(volatile u32 *)0x1FF0001CU = 1U;                    /* MSX_RUN: con BOOT.bin el MSX esperaba en reset */
     dsb();
     wake_setup();
