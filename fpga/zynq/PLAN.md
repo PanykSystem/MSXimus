@@ -239,8 +239,13 @@ Los 4 × USB del PL ya no hacen falta (el USB es el P3 del PS).
    (X/Y, hat, botones, Report ID) y saca la palabra SNES; botones 1‑8 → A B X Y LT RT SEL START
    (10+ botones: 9/10 = SEL/START). Probado en el PC (`tests/run.sh` con el gcc de WSL: DragonRise
    0079:0011 con sus X,X,X,X,Y, mando de 8 botones, estilo DS4 con Report ID, ejes con signo: 19/19).
-   PENDIENTE: Albert enchufa hub + teclado/ratón/mando en P3 → `armlog.tcl` (montajes/informes,
-   PORTSC, buzón HID) → teclear en DOS, mover el ratón, jugar.
+   🏆 14/09 noche, con hardware real en P3 (hub alimentado): teclado Logitech por HID boot →
+   teclea en el menú/DOS; F12 → OSD; mando "Lenovo X01": por dongle = Xbox 360 045E:028E (XInput,
+   driver Ryzee119/tusb_xinput en `arm/companion/xinput/`), por cable = DualShock 4 054C:09CC
+   (HID, descriptor de ~500 B → `CFG_TUH_ENUMERATION_BUFSIZE 1024` + feature 0x02 al montar).
+   Validado derecha+A → `joy1=0180`. ⚠️ El hub de Albert (con Ethernet RTL8153) a veces se queda
+   en la enumeración (sin timeout en TinyUSB): pendiente vigilante de puerto; Albert buscará un
+   hub plano sin RJ45. Ratón USB real: aún sin probar (por buzón validado).
    ✅ 13:10 Lado PL de los mandos VALIDADO sin USB (`tools/hid.tcl joy1 <hex>` escribe el buzón
    como lo haría el ARM; en BASIC `STICK(1)`/`STRIG(1)`): A → STRIG −1 ✓, pero DN daba
    izquierda, L abajo y R arriba → 🚨 **el `assign joystick0` del `top.v` compartido tenía el
