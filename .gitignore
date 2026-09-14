@@ -68,3 +68,8 @@ tools/v9968_sim/*.ppm
 
 # Salidas de los bancos de la SD (regenerables con tools/sd_tb/run.sh)
 tools/sd_tb/log_*.txt
+
+# --- bases de datos de herramientas de agentes (ruflo/agentdb), no son del proyecto ---
+agentdb.rvf
+agentdb.rvf.lock
+ruvector.db
