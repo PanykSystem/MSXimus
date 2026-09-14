@@ -106,8 +106,19 @@ Core: dado 3533, 1d3ab9ee, margen 0,913 ns; respaldo 3541 (0,039 ns, en el térm
 
 `cpu_run`, el término de seis señales que gobierna el refresco de la SDRAM, pasa a registrado antes de entrar al controlador de memoria: era el peor camino de temporización en los tres dados de la v3.6c. Commit 74f95de. Entra en la siguiente campaña.
 
+## v3.6e (14 de septiembre, sin campaña)
+
+Dos errores del core que salieron a la luz portándolo a la Zynq (`fpga/zynq/`, repo privado `MSXimus_zynq`), donde el buzón de depuración permite inyectar mandos y ratón y leer la telemetría sin hardware. Los dos están en `top.v` y afectan igual a la Console 60K; entran en la siguiente campaña.
+
+- **Mandos del BL616 girados 180 grados**: `assign joystick0/1` ordenaba los bits como [0]=arriba … [3]=derecha, pero `joy0_msx` (el byte que ve el PSG) los consume al revés, [3]=arriba … [0]=derecha. Medido: abajo daba izquierda, izquierda daba abajo, derecha daba arriba. Los botones A/B y el autodisparo no cambian.
+- **El ratón perdía el movimiento**: la relectura del registro 15 del PSG devolvía FFh (solo el 14 estaba implementado en la multiplexación de `cpu_din`; el `O_DA` del YM2149 sigue sin conectar). La interrupción de la BIOS lee, modifica y escribe ese registro dos veces por frame para los gatillos de `ON STRIG` (puerto 1 `AND AFh OR 03h`, puerto 2 `AND DFh OR 4Ch`): con FFh de partida escribía AFh y luego DFh, es decir, el pin 8 del puerto 2 subía y bajaba a 60 Hz, y cada pulso hacía que `msx_mouse` capturase y vaciase su acumulador en un ciclo fantasma que nadie leía. `PAD(17)`/`PAD(18)` devolvían 0 salvo con programas que leen cada frame (INDEV lo disimulaba). Ahora el registro 15 se relee (`psgPB`) y las escrituras quedan en CFh/8Fh, con el pin 8 quieto.
+- `msx_mouse` gana dos salidas de diagnóstico (`dbg_cur_x`, `dbg_rel_x`) que en la 60K quedan sin conectar.
+
+Commit 39289a2 en MSX_up_v3 (rama V3.5). Validado en la Zynq desde BASIC: `STICK(1)` 1/5/7/3 para arriba/abajo/izquierda/derecha, `PAD(17)` = 20 para un delta de 80 (sensibilidad ÷4), botones del ratón en `STRIG(2)`/`STRIG(4)`. Queda confirmar el sentido del ratón (`NEGAR_DELTA`) con un programa real.
+
 ## Pendiente
 
+- Campaña de la 60K con la v3.6d y la v3.6e (mandos y ratón).
 - Fase 3 de la SD: reloj de la tarjeta a 13,5 MHz, que exige rehacer el divisor y el muestreo.
 - Guardado de Manbow 2, que usa una flash AMD en el cartucho en vez de SRAM.
 - Publicar la v3.6: carpeta de release, notas y créditos.

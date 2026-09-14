@@ -147,7 +147,7 @@ Los puertos 9Ch y 8Ch, el "puerto 4" que el V9968 define para los flags de inter
 
 ### A0h-A2h: PSG
 
-El YM2149 principal. En A2h con el registro 14 seleccionado se lee el joystick, que viene del mando o del ratón USB; el bit 6 del registro 15 elige el puerto. Los botones 3 y 4 del mando hacen autodisparo sobre los botones 1 y 2.
+El YM2149 principal. En A2h con el registro 14 seleccionado se lee el joystick, que viene del mando o del ratón USB; el bit 6 del registro 15 elige el puerto. Los botones 3 y 4 del mando hacen autodisparo sobre los botones 1 y 2. El registro 15 se relee (lo último escrito): la BIOS lo lee, modifica y escribe en cada interrupción, y devolver FFh conmutaba el pin 8 del puerto 2 a 60 Hz y vaciaba el ratón (arreglado en la v3.6e). Los demás registros siguen devolviendo FFh al leerlos.
 
 ### A8h-ABh: PPI
 
