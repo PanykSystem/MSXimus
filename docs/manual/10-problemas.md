@@ -53,6 +53,7 @@ Por síntoma, qué mirar. Casi todo lo que hay aquí ha pasado de verdad durante
 |---|---|---|
 | El teclado no responde | Teclado con hub interno o inalámbrico con receptor compuesto | Probar otro teclado; conectar directo, sin hub |
 | El ratón no se ve | Receptor inalámbrico | Solo ratones con cable |
+| El mando no hace nada | Es XInput (Xbox o un receptor 2,4 GHz que se presenta como Xbox 360): el host de los USB-A es HID puro | Un mando USB genérico HID; muchos receptores tienen un modo D (DirectInput) además del X |
 | F12 no hace nada | El BL616 no tiene firmware | Grabarlo ([capítulo 02](02-instalacion.md)); el turbo es F11 |
 | La ñ no sale con un teclado español | La distribución del MSX no la tiene en esa tecla | Pendiente |
 

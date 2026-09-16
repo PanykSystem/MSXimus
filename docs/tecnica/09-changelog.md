@@ -124,11 +124,21 @@ Un apunte que sale de la misma revisión, sin arreglar: los registros 0 a 13 del
 
 **Un error del V9968, encontrado la misma noche y sin arreglar: el marcador de Xevious Fardraut Saga sale en blanco.** El juego (Namco 1989, 256 KB, `[GoodMSX] [2489]`) arranca, y el logo, la intro, la demostración y las escenas se dibujan bien; pero en partida la banda del marcador, arriba, sale blanca con puntos de colores en vez del `TOP / HI SCORE / AREA / LEFT` que muestra openMSX. El campo de juego, los sprites y el scroll van bien. Pasa igual en la Console 60K y en la Zynq, luego es del VDP compartido y no de ninguno de los dos portes. En la Zynq se volcó la VRAM durante la partida: la línea 0 de la página 0 tiene gráficos reales, y la zona de las líneas 212 a 255 (`6A00h`-`7FFFh`, fuera de la ventana visible) está entera a `FFh`, que en SCREEN 5 es blanco. Es decir, el VDP está mostrando arriba una zona de VRAM que nadie ha escrito. El juego usa el truco clásico de mover el desplazamiento vertical (R#23) a media pantalla con la interrupción de línea (R#19) para que el marcador quede quieto mientras el campo hace scroll, y los dos registros existen en `vdp_cpu_interface.v`, así que es un detalle de comportamiento y no una función que falte. Quedan dos mecanismos por separar: o el marcador vive en otra zona y a media pantalla se aplica el desplazamiento equivocado, o el juego sí lo dibuja en las líneas 212-255 y el V9968 pierde las escrituras por encima de la línea 211. Lo primero que hay que hacer es mirar en openMSX dónde escribe el juego el marcador y qué valor toma R#23 al principio del cuadro. Herramientas de la Zynq para seguirlo: `tools/vram.tcl` vuelca la VRAM cruda desde la DDR y `tools/vramfill.tcl` la rellena. Sin probar en el MSXnano, que lleva el VDP clásico.
 
+## v3.6f (16 de septiembre, interna)
+
+**Mandos por los USB-A.** Hasta aquí los dos USB-A solo servían teclado y ratón ("gamepads USB-A = pieza futura", decía `top.v`) y el único camino para un mando era el host USB del BL616, que vive en el USB-C OTG y necesita un hub o adaptador OTG con alimentación en el puerto donde va el cargador. Se descubrió el 16 de septiembre con el panel de F12 diciendo `USB: nada` y el mando en un USB-A. `usb_hid_host` ya sacaba `game_snes`, y en el mismo formato SNES de doce bits que la palabra del BL616: se OR-ea con el mando 1 del MCU, gateado por "hay mando en ese puerto" y sincronizado a 54 MHz. Cualquier mando en un USB-A cae en el puerto 1 del MSX. Commit 9a80f4d.
+
+Límite: el host del fabric es HID puro con el informe de los mandos genéricos (ejes a 00/7F/FF). Un mando XInput (Xbox y los receptores 2,4 GHz que se presentan como Xbox 360, como el del Lenovo C01) no se ve por USB-A; con el firmware del BL616 y un hub en el OTG sí se enumeraba, pero la lectura de interrupción fallaba (`XBOX client #0: submit failed`), y Albert decidió no seguir por ahí: el BL616 se queda sin mandos, con su firmware congelado en el commit 3e67939 (el del panel con las filas de diagnóstico), y los mandos del MSXimus son HID por USB-A.
+
+Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de agosto se compiló sin `usbh_initialize()`, la pila USB host, que se fue por delante al quitar los montajes de FatFs; ningún mando pudo funcionar nunca con esa release. Repuesta en 0219b25, y de paso la cruceta como hat switch y el recorte de ejes de más de 8 bits, portados de FPGA-Companion (7146b7c). Repositorio privado de respaldo `MSXimus-firmware-bl616`.
+
+Core: pendiente de la campaña v36h (dados 3607, 3613, 3617, 3623).
+
 ## Pendiente
 
 - Xevious Fardraut Saga: el marcador en blanco (V9968, ver arriba).
 
-- Validar en la 60K con el dado 3593 un mando real por el USB-C del BL616 (no se sabe de ninguno que haya funcionado con las direcciones bien desde la v3.1) y el ratón sin INDEV.
+- Validar la v3.6f con un mando USB HID genérico en un USB-A (Albert compra uno). El ratón sin INDEV quedó validado el 16 de septiembre con el 3593.
 - Entender por qué el `cpu_run` registrado (v3.6d) deja la SDRAM sin arrancar, si es que es él: un segundo dado con y sin el registro lo cerraría.
 - Fase 3 de la SD: reloj de la tarjeta a 13,5 MHz, que exige rehacer el divisor y el muestreo.
 - Guardado de Manbow 2, que usa una flash AMD en el cartucho en vez de SRAM.

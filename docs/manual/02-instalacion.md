@@ -49,7 +49,7 @@ Con eso, una microSD con ROMs y discos, y ya está. El [capítulo 03](03-tarjeta
 
 ## 2. El panel F12: el BL616 (opcional)
 
-La Console 60K lleva un microcontrolador **BL616** cableado a la FPGA de fábrica. Con un firmware, dibuja un panel de estado sobre la imagen del MSX cuando se pulsa **F12**: versión del core, CPU y turbo, tarjeta, ventilador, teclado y red. Con F12 otra vez, el juego sigue donde estaba. Es de solo lectura: no hay menú ni cursor.
+La Console 60K lleva un microcontrolador **BL616** cableado a la FPGA de fábrica. Con un firmware, dibuja un panel de estado sobre la imagen del MSX cuando se pulsa **F12**: versión del core, CPU y turbo, tarjeta, ventilador, teclado, red y dos filas de diagnóstico del USB del propio BL616 (*USB* y *Mando*: qué ha enumerado su host en el USB-C OTG; con nada conectado ahí dicen `USB: nada`, y es lo normal). Con F12 otra vez, el juego sigue donde estaba. Es de solo lectura: no hay menú ni cursor.
 
 No cuesta nada en hardware: la línea serie entre los dos chips ya está en la placa. Sin el firmware, el MSX funciona igual; solo falta el panel. Como el BL616 se queda la tecla F12, el turbo va en **F11**.
 
