@@ -7,7 +7,7 @@ Todo el sonido del MSXimus sale por el HDMI, mezclado dentro del core. Este cap�
 | Chip | Qué es | Dónde lo ve el software |
 |---|---|---|
 | **PSG** | El sonido básico de todo MSX, tres voces y ruido | Puertos A0-A2, como siempre |
-| **Segundo PSG** | Otro PSG completo | Puertos 10-12, para el software que lo busca ahí |
+| ~~Segundo PSG~~ | Retirado en la v3.6h (dieta de área): los puertos 10-12 quedan vacíos | Sigue en el código tras `ENABLE_PSG2`, apagado |
 | **SCC y SCC+** | El chip de ondas de Konami, cinco voces | Dentro del cartucho emulado, en el slot 2. Cualquier juego con mapper Konami-SCC lo tiene, y los que usan el SCC+ también |
 | **Segundo SCC** | Otro SCC en el slot 1 | Para trackers y reproductores que buscan un SCC como cartucho aparte. Se activa en Ajustes, **Slot 1 = 2o SCC**, y es incompatible con el Game Master 2, que va en el mismo slot |
 | **OPLL** | MSX-MUSIC, el FM-PAC de nueve voces | Puertos 7C-7D, con su BIOS en el pack |

@@ -36,7 +36,7 @@ El lanzador copia el árbol `fpga/` tres veces al directorio temporal, `%LOCALAP
 
 1. Activa los interruptores que el repositorio deja apagados: descomenta `ENABLE_V9968_VDP` y `ENABLE_VRAM_DDR3` en `top.v` y pone `USE_V9968 1` y `USE_VRAM_DDR3 1` en `build.tcl`. En la línea ligera además comenta los ocho `define` del audio grande, que van juntos porque dependen entre sí.
 2. Comprueba que todo ha quedado como debe y aborta si no.
-3. Escribe el **dado** en `PERIOD_MS` de `fpga/src/dbg_uart.v`. Los dados son números primos: perturban el placement sin cambiar la función, porque solo tocan el periodo de una telemetría que va apagada.
+3. Escribe el **dado** en `PERIOD_MS` de `fpga/src/dbg_uart.v`. Los dados son números primos: perturban el placement sin cambiar la función, porque solo tocan el periodo de un latido del `dbg_uart` (desde la v3.6h en modo mínimo: la telemetría entera solo con `ENABLE_TELEMETRIA`). El dado tiene que seguir en el netlist: si se podara, todos los dados darían el mismo bitstream.
 4. Lanza la síntesis y el place and route.
 
 Tres copias porque, en la completa, una de cada tres no ruta del todo: se queda con un centenar o dos de nets sin conectar y no produce bitstream. Es normal y no dice nada del diseño.

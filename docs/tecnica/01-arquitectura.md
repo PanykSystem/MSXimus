@@ -140,7 +140,7 @@ Siete generadores entran en un mezclador con saturación en `clk_54m`:
 | Chip | Puertos | Implementación |
 |---|---|---|
 | PSG YM2149 | A0-A2 | Con filtro de paso bajo, y el registro 14 sirve el joystick USB |
-| Segundo PSG | 10-12 | El mismo módulo, para el software que lo busca ahí |
+| ~~Segundo PSG~~ | 10-12 | Retirado en la v3.6h (dieta): puertos vacíos. Vuelve con `ENABLE_PSG2` |
 | SCC / SCC+ | En la megaram, 9800h y B800h | `scc_wave2` en Verilog puro; el VHDL original lo barría la síntesis de la GW5A |
 | Segundo SCC | Slot 1 | El mismo módulo, en el slot que no ocupa la megaram |
 | OPLL YM2413 | 7C-7D | `jt2413` de JOTEGO |
@@ -157,7 +157,9 @@ El grupo clásico pasa por una ganancia maestra ajustable de 0 a 7 por el puerto
 - **S1990 del turbo R** en E4-E7: la máquina se identifica como turbo R y la rutina CHGCPU de la BIOS mueve el turbo. No hay R800.
 - **ESP32-C6** por los puertos 06-07: el puente `wifi_lite` es una UART con FIFO de recepción de 2080 bytes, prescaler fijo 27 ÷ 31 = 870968 bps (el firmware del ESP va a 859372, un 1,3 % menos, dentro de la tolerancia de una UART), y "recepción rápida" que retiene la lectura hasta 25 ms cuando el FIFO está vacío.
 - **BL616**: el core le manda su estado por UART y él dibuja el panel F12 sobre el HDMI. Mientras el panel está abierto, el MCU congela el Z80 parando su `cpu_run`, sin resetearlo.
-- **Tira de ocho LEDs WS2812**: diagnóstico. El LED de red parpadea con el tráfico de la UART del ESP.
+- ~~Tira de ocho LEDs WS2812~~: retirada de la build en la v3.6h (`ENABLE_WS2812`, apagado).
+- **Ventilador**: fijo a ON desde la v3.6h. El control por temperatura con el oscilador de anillo (`fan_ctrl` + `ro_osc`) sigue en el código tras `ENABLE_FAN_TEMP`; su termómetro nunca estuvo calibrado y el anillo era el origen de los holds tolerados del gate.
+- **Telemetría serie** (`dbg_uart` por E22 y la UART del USB-C): fuera de la build de producción desde la v3.6h. Queda un latido con el periodo del dado (`PERIOD_MS`), que es lo que siembra el placement de cada campaña. Para una caza, `ENABLE_TELEMETRIA` la devuelve entera.
 - **Ventilador** controlado por temperatura, con un oscilador en anillo como sensor.
 - **UART de depuración** a 54 MHz por un PMOD, apagada en las entregas.
 

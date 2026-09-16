@@ -43,7 +43,7 @@ That is a change at the foundation rather than on the surface, and it earned its
 
 **WiFi** · UNAPI through an external **ESP32-C6**, with an **optional display** for extra information
 
-**Extras** · 5.37 MHz Panasonic-style turbo on **F11** · turboR-style machine identification · your choice of two BIOSes · boot logo · temperature-driven fan control · serial-port telemetry for diagnostics
+**Extras** · 5.37 MHz Panasonic-style turbo on **F11** · turboR-style machine identification · your choice of two BIOSes · boot logo · serial-port telemetry for diagnostics (build option since v3.6)
 
 ## Required hardware
 

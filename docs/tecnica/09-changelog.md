@@ -134,6 +134,15 @@ Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de 
 
 Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h, cuatro dados: 3613 y 3607 fuera de gate (-0,05 y -1,87 ns en el motor del OPL4), 3617 con una red sin rutar. Sin respaldo. En la semana, once dados para tres útiles: al 98 % de CLS la campaña de tres ya no basta, y la de cuatro tampoco sobra.
 
+## v3.6g y v3.6h (16 de septiembre, interna): generación C, espera a la DDR3 y la dieta
+
+La última build de la era v3 por decisión de Albert: después de esta, solo errores graves.
+
+- **V9968 generación C** (679b8f0, traído de la Zynq): R#20 y R#21 se ignoran mientras el bit 7 del puerto #4 (9Ch, y su espejo 8Ch, que ahora se decodifican) esté a 1, que es el estado tras el reset; el puerto #4 devuelve ese bit. Y la máscara del A17 en las bases de tabla en modo V9958. Es lo que saca el marcador de Xevious Fardraut Saga: la BIOS escribe R#20..R#23 = 0 en cada init del VDP y en la generación B eso encendía el modo nativo sin que nadie lo pidiera. Consecuencia: el software de la generación B (DEVCON con 0x9F, V9968DM, la TECH DEMO 0.7.0) no ve el V9968 hasta que haga `OUT (9Ch),0` antes de tocar R#20/R#21.
+- **El MSX espera a la DDR3** (856d9c6): el paso a `reset3_n` (streamer del pack y Z80) espera a `ready` del backend DDR3 de la VRAM, con tope de ~5 s para arrancar a ciegas si nunca calibra. Y **el LED de la SD (U12) parpadea solo** mientras la DDR3 no ha calibrado (42c7d1d): el único chivato sin PC. Motivo: los dados 3557 (v36e) y 3623 (v36h) se quedaban en negro desde el cargador y arrancaban desde el USB del PC, con el 3593 arrancando siempre; S1 no lo curaba, lo que apunta a la calibración de la DDR3 y no al core MSX (y exculpa, probablemente, a la v3.6d).
+- **La dieta** (7d0f761): fuera de la build de producción la telemetría serie (queda el latido del dado), la tira WS2812, el ventilador por temperatura (fijo a ON) y el segundo PSG; un solo decodificador de teclado para los dos USB-A. Se queda el segundo SCC. Medido con `tools/medir_area.ps1`: LUT 38.100 → 36.173 (-5,1 %), FF 35.185 → 33.515, ALU 5.622 → 4.986. Cada pieza sigue en el código tras su `define`.
+- Campaña v36k: los cinco dados murieron en el SDC (una excepción sobre `psg2`, que ya no existe; Gowin aborta). Campaña v36l en marcha.
+
 ## Pendiente
 
 - Xevious Fardraut Saga: el marcador en blanco (V9968, ver arriba).

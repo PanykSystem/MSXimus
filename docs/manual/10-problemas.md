@@ -74,7 +74,7 @@ Por síntoma, qué mirar. Casi todo lo que hay aquí ha pasado de verdad durante
 - **Ajustes**: muestra la versión del core que hay grabada.
 - **F12**: el panel del BL616, con el estado de la CPU, la tarjeta, el ventilador, el teclado y la red.
 - **La pantalla del ESP32**: red, tráfico, turbo, hora.
-- **La tira de LEDs**, si se ha montado la tira de ocho WS2812 en el pin previsto: encendido, CAPS, kana, actividad de disco, turbo, red, mando y teclado.
+- ~~La tira de LEDs~~: el driver de la tira de ocho WS2812 se retiró de la build en la v3.6h (dieta de área; nadie la montaba). Sigue en el código tras `ENABLE_WS2812`.
 - **Puertos de diagnóstico** desde BASIC: `INP(&H2F)` da la versión del core, `INP(&H2D)` el estado del USB, `INP(&H2E)` el del ratón ([capítulo 02 de la referencia técnica](../tecnica/02-puertos-es.md)).
 
 ## Cómo reportar un problema
