@@ -589,6 +589,29 @@ end
 //        bus_data <= ex_bus_data;
 //    end
 
+    // ========================================================================
+    // 16/09 (V3.6g): EL MSX NO ARRANCA HASTA QUE LA DDR3 DE LA VRAM HA CALIBRADO
+    // ------------------------------------------------------------------------
+    // La VRAM del V9968 vive en la DDR3 del SOM y su calibracion es una loteria
+    // con reintentos de 335 ms (v9968_ddr3_backend, _131). Hasta hoy NADIE
+    // esperaba a `ready`: la secuencia reset1/2/3 soltaba el streamer del pack y
+    // el Z80 a los ~120 ms, y si la calibracion iba por el 2o o 3er intento la
+    // BIOS escribia la VRAM en el vacio (o el bridge se quedaba esperando un
+    // done que no llega) = PANTALLA EN NEGRO SIN LOGO, y la maquina viva por
+    // debajo. Como cada dado calibra distinto, unos arrancaban y otros no con el
+    // MISMO RTL: el 3557 (v36e) y el 3623 (v36h) se quedaban en negro desde el
+    // cargador y arrancaban desde el USB del PC (otra rampa, otro tiempo); el
+    // 3593 arrancaba siempre. Puede que la V3.6d nunca tuviera la culpa.
+    // Ahora el paso a reset3_n espera a `vddr_ready` (sincronizado a 27 MHz),
+    // con un tope de ~5 s (127 pasos de rst_step de ~39 ms) para que una DDR3
+    // que no calibre nunca deje arrancar a ciegas como hasta ahora, en vez de
+    // dejar la placa muerta.
+    // ========================================================================
+    wire vddr_ready_por;                       // ready del backend DDR3 (1 sin DDR3)
+    reg  [1:0] vddr_rdy_s = 2'b00;             // 2 FF a clk_27m (viene del dominio x1)
+    always @(posedge clk_27m) vddr_rdy_s <= {vddr_rdy_s[0], vddr_ready_por};
+    reg  [6:0] vddr_wait_steps = 7'd0;         // pasos de rst_step esperando (127 = tope)
+
     //startup logic
     reg reset1_n_ff;
     reg reset2_n_ff;
@@ -623,23 +646,30 @@ end
             reset1_n_ff <= 0;
             reset2_n_ff <= 0;
             reset3_n_ff <= 0;
+            vddr_wait_steps <= 7'd0;
         end
         else begin
             case ( rst_seq )
-                2'b00: 
+                2'b00:
                     if (rst_step == 1 ) begin
                         reset1_n_ff <= 1;
                         rst_seq <= 2'b01;
                     end
-                2'b01: 
+                2'b01:
                     if (rst_step == 1) begin
                         reset2_n_ff <= 1;
                         rst_seq <= 2'b10;
                     end
                 2'b10:
+                    // V3.6g: reset3_n (streamer del pack + Z80) solo cuando la
+                    // DDR3 de la VRAM esta calibrada, o tras ~5 s a ciegas.
                     if (rst_step == 1) begin
-                        reset3_n_ff <= 1;
-                        rst_seq <= 2'b11;
+                        if (vddr_rdy_s[1] || vddr_wait_steps == 7'd127) begin
+                            reset3_n_ff <= 1;
+                            rst_seq <= 2'b11;
+                        end
+                        else
+                            vddr_wait_steps <= vddr_wait_steps + 7'd1;
                     end
             endcase
         end
@@ -2165,6 +2195,7 @@ assign keyboard_addr = ppi_port_c[3:0];
     wire        vddr_a_done, vddr_b_done;
     wire        vddr_ready;
     wire [7:0]  vddr_diag;
+    assign vddr_ready_por = vddr_ready;    // V3.6g: la secuencia de arranque espera a esto
     wire [31:0] vddr_ops;      // _129b: {lecturas[31:16], escrituras[15:0]}
 
     v9968_sdram_bridge u_v68bridge (
@@ -2211,6 +2242,7 @@ assign keyboard_addr = ppi_port_c[3:0];
         .ddr_dq(ddr_dq), .ddr_dqs(ddr_dqs), .ddr_dqs_n(ddr_dqs_n)
     );
 `else
+    assign vddr_ready_por = 1'b1;          // V3.6g: sin DDR3 no hay que esperar a nadie
     // _148 FIX B — CAMINO LEGACY (VRAM en la SDRAM compartida, respaldo _137).
     // memory.v solo sabe escribir 1 BYTE por operacion en wv2/wv3 (SdrDat =
     // {wdata,wdata} con la DQM sacada de addr[0]) y NO se toca. El bridge se
