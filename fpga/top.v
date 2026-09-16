@@ -38,6 +38,14 @@
 //`define ENABLE_VRAM_DDR3   // _128X EXPERIMENTO: la VRAM del V9968 en la DDR3 del SOM (v9968_ddr3_backend; requiere ENABLE_V9968_VDP y USE_VRAM_DDR3=1 en build.tcl). ADVERTENCIA: DDR3 analogicamente marginal en esta placa (saga _94-_103)
 //`define TURBO_SIN_GUARDA_SDRAM  // 🧪 EXPERIMENTO 26/08 — **PROBADO Y DESCARTADO**: sin la guarda el MSX SE CUELGA al poner el turbo (placa, 26/08). La guarda NO estaba obsoleta pese a que la VRAM se mudo a la DDR3: lo que la justifica no es la CONTENCION del VDP sino la LATENCIA de la SDRAM (y su refresco), que a 5,37 no cabe en un T-estado de 186 ns. Se deja el define por si algun dia se acelera el controlador. Coste medido de la guarda: 18% (4,41 de 5,37).
 `define ENABLE_TURBOR_ID   // V3.1: S1990 del turboR (E4h-E7h) — la maquina se identifica como turboR y CHGCPU mueve el turbo. NO hay R800: ver fpga/src/msx_s1990.v
+// ---- DIETA 16/09 (V3.6h, la ultima build). Decision de Albert: fuera de la
+// build de produccion la telemetria COM11, la tira WS2812, el ventilador por
+// temperatura y el segundo PSG; se queda el segundo SCC. Cada uno vuelve
+// descomentando su define (para una caza, o si alguien monta la tira).
+//`define ENABLE_TELEMETRIA  // dbg_uart por E22/USB-C con los contadores del shim, DDR3, audio, fan
+//`define ENABLE_WS2812      // tira de 8 LEDs WS2812 en la carcasa
+//`define ENABLE_FAN_TEMP    // ventilador por temperatura (fan_ctrl + oscilador de anillo); sin el, fijo a ON
+//`define ENABLE_PSG2        // segundo PSG (OCM 2a gen) en 10h-12h con su filtro
 `define ENABLE_IOSYS       // V3.1 PELDANO 1 (TangCore): iosys_bl616 + textdisp por la UART del BL616 (V14/U15) y overlay sobre el HDMI. Sin firmware en el MCU todavia: el overlay se enciende solo unos segundos al arrancar para demostrar la cadena y luego se aparta.
 //`define DISABLE_BOOT_MENU  // _127D: arranque MSX DIRECTO (enmascara la firma AB del menu; tambien salta el init FM de esa pagina). Solo builds de prueba.
 
@@ -416,6 +424,7 @@ end
     // El fan_ctrl se queda instanciado SOLO como termometro: fan_dbg_cnt
     // sigue saliendo por el COM11 (columna T), su decision se ignora.
     wire fan_en_ctrl;  // decision del control, hoy ignorada (telemetria)
+`ifdef ENABLE_FAN_TEMP
     fan_ctrl #(.WIN_CYC(32'd262144), .K_ON(10'd3), .K_OFF(10'd1),
                .FORCE_ON_SEC(32'd360)) u_fanctrl (
         .clk        (clk_27m),
@@ -426,6 +435,15 @@ end
         .fan_en     (fan_en_ctrl),
         .dbg_cnt    (fan_dbg_cnt)
     );
+`else
+    // DIETA 16/09: ventilador FIJO a ON (decision de Albert). Fuera el control
+    // por temperatura y su oscilador de anillo (el que daba los holds del
+    // gate). El termometro nunca estuvo calibrado.
+    assign fan_en_ctrl = 1'b1;
+    assign fan_dbg_cnt = 20'd0;
+    assign fan_ro_en   = 1'b0;
+    assign fan_ro_rst  = 1'b0;
+`endif
     // _175: experimento _173 CERRADO — con el pin a 1 el ventilador giro
     // perfecto en placa (03/08): el camino fisico (AB12/conector/fan) esta
     // BIEN. El "no gira nunca" de las s006/s007 tiene explicacion mundana:
@@ -433,11 +451,15 @@ end
     // de FORCE_ON_SEC) + baseline envenenada por reflasheo en caliente
     // (leccion _124). Vuelta al control automatico como en la v2.0.
     assign fan_en_o = fan_en_ctrl;
+`ifdef ENABLE_FAN_TEMP
     ro_osc u_roosc (
         .ro_en   (fan_ro_en),
         .cnt_rst (fan_ro_rst),
         .cnt_out (fan_ro_cnt)
     );
+`else
+    assign fan_ro_cnt = 20'd0;
+`endif
 
     // ================================================================
     //  DEBUG BRING-UP 60K — latidos de reloj y estado vital por PMODs
@@ -3016,7 +3038,9 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
 
     wire [7:0] psg2Sound1;
     wire [7:0] psg2_dout;
-
+    wire [7:0] psg2Sound3;
+    wire psg2_req_r;
+`ifdef ENABLE_PSG2
     YM2149 psg2 (
         .I_DA(cpu_dout),
         .O_DA(psg2_dout),
@@ -3042,7 +3066,6 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
         .debug ()
     );
 
-    wire [7:0] psg2Sound3;
     psg_filter filter2 (
         .clk_27m (clk_27m),
         .reset (~bus_reset_n),
@@ -3051,8 +3074,15 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     );
 
     // PSG2 register read-back at port 12h (detection by players/trackers)
-    wire psg2_req_r;
     assign psg2_req_r = ( bus_addr[7:0] == 8'h12 && bus_iorq_n == 0 && bus_m1_n == 1 && bus_rd_n == 0 ) ? 1 : 0;
+`else
+    // DIETA 16/09: sin segundo PSG. 10h/11h se ignoran, 12h no se decodifica
+    // (lee FFh como cualquier puerto vacio) y el mezclador recibe silencio.
+    assign psg2Sound1 = 8'd0;
+    assign psg2_dout  = 8'hFF;
+    assign psg2Sound3 = 8'd0;
+    assign psg2_req_r = 1'b0;
+`endif
 
     //opll
     wire opll_req_n; 
@@ -5668,6 +5698,8 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     // consume el HDMI, desde msx2hdmi_v9968) discrimina durante un corte
     // audible: ambos picos altos = receptor; fuente alta y hdmi bajo =
     // CDC congelado; ambos bajos = el mezclador se calla de verdad.
+    wire usb_uart_tx_int;
+`ifdef ENABLE_TELEMETRIA
     reg  [15:0] amp_src_acc = 16'd0, amp_src = 16'd0;
     reg  [22:0] amp_src_win = 23'd0;
     wire [15:0] asrc_abs = audio_sample[15] ? (~audio_sample + 16'd1)
@@ -5681,7 +5713,6 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         else if (asrc_abs > amp_src_acc) amp_src_acc <= asrc_abs;
     end
 
-    wire usb_uart_tx_int;
     // el pulso nace en clk_27m y el dbg_uart vive en clk_54m: 2FF y flanco
     reg [2:0] sd_wr_tog_s = 3'b000;
     always @(posedge clk_54m) sd_wr_tog_s <= {sd_wr_tog_s[1:0], sd_wr_tog};
@@ -5755,6 +5786,20 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .cnt_g(32'd0),                  // (eran los testigos del SPI del S3)
         .tx(usb_uart_tx_int)
     );
+`else
+    // DIETA 16/09: SIN telemetria en produccion (decision de Albert). Queda el
+    // dbg_uart en modo MINIMO: un latido en E22/USB-C con el periodo del dado
+    // (PERIOD_MS, el que siembra el placement de cada campana: ese tiene que
+    // seguir en el netlist) y NADA de contadores: la sintesis poda todo lo que
+    // solo alimentaba a la telemetria (vumetro, misses del shim, ops DDR3...).
+    // Para una caza: descomentar ENABLE_TELEMETRIA y vuelve todo.
+    dbg_uart #(.CLK_HZ(53_996_000), .MINIMO(1)) u_dbguart (
+        .trig(1'b0), .clk(clk_54m), .rst_n(bus_reset_n),
+        .cnt_a(32'd0), .cnt_b(32'd0), .cnt_c(32'd0), .cnt_d(32'd0),
+        .cnt_e(32'd0), .cnt_f(32'd0), .cnt_g(32'd0),
+        .tx(usb_uart_tx_int)
+    );
+`endif
     assign usb_uart_tx = usb_uart_tx_int;   // (por si el USB-C tambien escucha)
 `else
     assign usb_uart_tx = 1'b1;      // UART idle
@@ -5939,12 +5984,17 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     wire [23:0] ws_c6 = joy_on   ? 24'h202000 : 24'h000000;  // 6 JOY    : yellow
     wire [23:0] ws_c7 = kbd_act  ? 24'h181818 : 24'h000000;  // 7 KBD    : white flash
 
+`ifdef ENABLE_WS2812
     ws2812 #(.NUM_LEDS(8), .CLK_FRE(27)) ws_strip (
         .clk   (clk_27m),
         .rst_n (bus_reset_n),
         .rgb   ({ws_c0, ws_c1, ws_c2, ws_c3, ws_c4, ws_c5, ws_c6, ws_c7}),
         .dout  (ws2812_led)
     );
+`else
+    // DIETA 16/09: sin tira (decision de Albert; nadie la monta). El pin en reposo.
+    assign ws2812_led = 1'b0;
+`endif
 
     // ===== STANDALONE MERGE: USB host (BL616 FPGA Companion) — from MSXnano =====
     wire [127:0] keyboard;
@@ -6089,23 +6139,30 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     always @(posedge clk_54m)
         if (any_tog_s[2] ^ any_tog_s[1]) any_rep_cnt <= any_rep_cnt + 8'd1;
 
-    wire [127:0] kbd_usb1, kbd_usb2;
+    // DIETA 16/09: UN solo decodificador de teclado para los dos USB-A (antes
+    // habia dos identicos, 430 LUT cada uno, y sus mapas se OR-eaban). Los dos
+    // hosts viven en clk_usb12, asi que el mux es del mismo dominio: manda el
+    // USB-A 1 si tiene teclado; si no, el 2. Dos teclados a la vez ya no suman
+    // (nadie los tiene).
+    wire        kb_from2 = (usb1_typ != 2'd1) && (usb2_typ == 2'd1);
+    wire [1:0]  kb_typ   = kb_from2 ? usb2_typ    : usb1_typ;
+    wire        kb_rep   = kb_from2 ? usb2_report : usb1_report;
+    wire [7:0]  kb_mods  = kb_from2 ? usb2_mods   : usb1_mods;
+    wire [7:0]  kb_k1    = kb_from2 ? usb2_k1     : usb1_k1;
+    wire [7:0]  kb_k2    = kb_from2 ? usb2_k2     : usb1_k2;
+    wire [7:0]  kb_k3    = kb_from2 ? usb2_k3     : usb1_k3;
+    wire [7:0]  kb_k4    = kb_from2 ? usb2_k4     : usb1_k4;
+    wire [127:0] kbd_usb1;
     usb_kbd_decode dec_usb1 (
         .clk12 (clk_usb12), .rst_n (pll12_lock),
-        .typ (usb1_typ), .report (usb1_report), .mods (usb1_mods),
-        .k1 (usb1_k1), .k2 (usb1_k2), .k3 (usb1_k3), .k4 (usb1_k4),
+        .typ (kb_typ), .report (kb_rep), .mods (kb_mods),
+        .k1 (kb_k1), .k2 (kb_k2), .k3 (kb_k3), .k4 (kb_k4),
         .bitmap (kbd_usb1)
-    );
-    usb_kbd_decode dec_usb2 (
-        .clk12 (clk_usb12), .rst_n (pll12_lock),
-        .typ (usb2_typ), .report (usb2_report), .mods (usb2_mods),
-        .k1 (usb2_k1), .k2 (usb2_k2), .k3 (usb2_k3), .k4 (usb2_k4),
-        .bitmap (kbd_usb2)
     );
     // cruce 12M -> 27M: bits cuasi-estaticos (pulsaciones de ms), 2FF por bit
     reg [127:0] kbd_usb_s1 = 128'd0, kbd_usb_s2 = 128'd0;
     always @(posedge clk_27m) begin
-        kbd_usb_s1 <= kbd_usb1 | kbd_usb2;
+        kbd_usb_s1 <= kbd_usb1;
         kbd_usb_s2 <= kbd_usb_s1;
     end
     assign keyboard = kbd_usb_s2;

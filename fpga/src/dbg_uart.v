@@ -19,7 +19,11 @@ module dbg_uart #(
     // TRIG_MODE=1: la linea se emite CUANDO PASA ALGO (pulso en trig), no cada
     // PERIOD_MS. Para trazas de eventos raros y rapidos, donde muestrear por
     // reloj no sirve: a 53 escrituras/s el periodo de 250 ms veria 1 de cada 13.
-    parameter TRIG_MODE = 0
+    parameter TRIG_MODE = 0,
+    // DIETA 16/09: MINIMO=1 = solo el latido con el periodo del dado (PERIOD_MS),
+    // sin formateador ni contadores. Es lo que va en produccion: mantiene la
+    // siembra del placement de las campanas y cuesta un contador.
+    parameter MINIMO = 0
 )(
     input  wire        clk,
     input  wire        rst_n,
@@ -76,6 +80,17 @@ module dbg_uart #(
         end
     endfunction
 
+generate if (MINIMO) begin : g_minimo
+    // un latido: tx cambia cada PERIOD_MS (el dado entra en la comparacion)
+    reg [31:0] lat_cnt = 32'd0;
+    reg        lat = 1'b1;
+    always @(posedge clk) begin
+        if (!rst_n) begin lat_cnt <= 32'd0; lat <= 1'b1; end
+        else if (lat_cnt == TICKS - 1) begin lat_cnt <= 32'd0; lat <= ~lat; end
+        else lat_cnt <= lat_cnt + 32'd1;
+    end
+    always @(*) tx = lat;
+end else begin : g_completo
     reg [31:0] period_cnt;
     reg [9:0]  baud_cnt;
     reg [3:0]  bit_idx;         // 0=start, 1-8=datos, 9=stop
@@ -145,4 +160,5 @@ module dbg_uart #(
         end
     end
 
+end endgenerate
 endmodule
