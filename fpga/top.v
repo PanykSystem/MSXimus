@@ -1995,7 +1995,9 @@ assign keyboard_addr = ppi_port_c[3:0];
     // [3:2]=10 (0x88-8B libre en el MSXimus; vecinos PSG A0-A2/PPI A8-AA/
     // Y8950 C0-C1). mode = bus_addr[1:0] es identico en ambos rangos, asi
     // que el glue recibe el mismo puerto; BIOS/DOS siguen en 98-9B intactos.
-    assign vdp_io_hit = ( bus_addr[7:5] == 3'b100 && bus_addr[3:2] == 2'b10 );
+    // 15/09 (gen C de HRA, ceeecd7): + puerto #4 = 9Ch (y su espejo 8Ch): flags de
+    // interrupcion y el bit 7 que desbloquea R#20/R#21. 9Dh-9Fh/8Dh-8Fh siguen fuera.
+    assign vdp_io_hit = ( bus_addr[7:5] == 3'b100 && (bus_addr[3:2] == 2'b10 || bus_addr[3:0] == 4'b1100) );
 `else
     assign vdp_io_hit = ( bus_addr[7:2] == 6'b100110 );
 `endif
@@ -2095,7 +2097,7 @@ assign keyboard_addr = ppi_port_c[3:0];
     v9968_cpu_glue u_v68glue (
         .clk_86(clk_86), .rst_n(rst86_n),
         .csw_n(vdp_csw_n), .csr_n(vdp_csr_n),
-        .mode(bus_addr[1:0]), .cdo(cpu_dout), .cdi_r(vdp_dout),
+        .mode(bus_addr[2:0]), .cdo(cpu_dout), .cdi_r(vdp_dout),   // [2] = puerto #4 (9Ch)
         .wait_n(v68_wait86_n),   // _177: /WAIT del puerto CPU del V9968
         .bus_address(v68_bus_address), .bus_ioreq(v68_ioreq),
         .bus_write(v68_write), .bus_valid(v68_valid), .bus_ready(v68_ready),
