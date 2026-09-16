@@ -151,7 +151,10 @@ set_false_path -from [get_clocks {clk_54m}] -to [get_pins {kanji1/?*?/?*}]
 set_false_path -from [get_clocks {clk_54m}] -to [get_pins {ocm_ports/?*?/CE}]
 set_false_path -from [get_clocks {clk_54m}] -to [get_pins {ocm_ports/?*?/D}]
 set_false_path -from [get_clocks {clk_54m}] -to [get_pins {psg1/?*?/?*}]
-set_false_path -from [get_clocks {clk_54m}] -to [get_pins {psg2/?*?/?*}]
+# DIETA 16/09 (V3.6h): psg2 fuera del netlist en produccion (ENABLE_PSG2 apagado) ->
+# excepcion retirada; Gowin ABORTA (TA2003) ante un objeto inexistente, no lo ignora.
+# Si vuelve el PSG2, vuelve esta linea:
+# set_false_path -from [get_clocks {clk_54m}] -to [get_pins {psg2/?*?/?*}]
 # v3.4 (_44): chips SCC de vuelta a 27M (config TN20K, fase alineada v3.0) —
 # misma clase cuasi-estatica por protocolo de bus que rtc/kanji/psg
 set_false_path -from [get_clocks {clk_54m}] -to [get_pins {SccCh/?*?/?*}]
