@@ -2294,6 +2294,20 @@ assign keyboard_addr = ppi_port_c[3:0];
     wire [7:0]  iosys_ovl_x, iosys_ovl_y;
     wire [14:0] iosys_ovl_color;
 
+// 16/09: MANDOS HID POR LOS USB-A DEL FABRIC. usb_hid_host saca `game_snes` en
+// el MISMO formato SNES de 12 bits que la palabra del BL616 (bit 4 arriba, 5
+// abajo, 6 izquierda, 7 derecha, 8 A, 0 B, 9 X, 1 Y, 10/11 hombros), asi que se
+// OR-ea con el mando 1 del MCU: cualquier mando en un USB-A cae en el puerto 1
+// del MSX. Hasta hoy los USB-A solo servian teclado y raton ("gamepads USB-A =
+// pieza futura") y el unico camino para un mando era el USB-C del BL616 con un
+// hub con alimentacion; Albert lo descubrio el 16/09 con el panel de F12
+// diciendo "USB: nada" y el mando enchufado en el USB-A. Limite: usb_hid_host
+// es HID puro y solo entiende el informe de los mandos "SNES USB" (ejes
+// 00/7F/FF en los bytes 3-4, botones en 5-6); un mando XInput (Xbox y los
+// dongles que lo imitan, como el del Lenovo C01) sigue necesitando el BL616.
+// Se asigna en el bloque ENABLE_USB_KBD, ya sincronizado a clk_54m.
+wire [11:0] usb_joy_snes;
+
 `ifdef ENABLE_IOSYS
 
     // ~6 s a 27 MHz. Cuenta solo mientras el PLL esta enganchado.
@@ -2404,10 +2418,12 @@ assign keyboard_addr = ppi_port_c[3:0];
     // mismo dia leyendo el firmware. El companion de la Zynq (hid_pad.c) sigue
     // este mismo formato.
     wire [15:0] mcu_hid1, mcu_hid2;
-    assign joystick0 = { mcu_hid1[9],  mcu_hid1[1],    // autofire  <- X, Y
-                         mcu_hid1[0],  mcu_hid1[8],    // TrigB/A   <- B, A
-                         mcu_hid1[4],  mcu_hid1[5],    // [3] arriba / [2] abajo
-                         mcu_hid1[6],  mcu_hid1[7] };  // [1] izq    / [0] der
+    // 16/09: el mando 1 es el del BL616 O el de cualquier USB-A (mismo formato).
+    wire [11:0] hid1_all = mcu_hid1[11:0] | usb_joy_snes;
+    assign joystick0 = { hid1_all[9],  hid1_all[1],    // autofire  <- X, Y
+                         hid1_all[0],  hid1_all[8],    // TrigB/A   <- B, A
+                         hid1_all[4],  hid1_all[5],    // [3] arriba / [2] abajo
+                         hid1_all[6],  hid1_all[7] };  // [1] izq    / [0] der
     assign joystick1 = { mcu_hid2[9],  mcu_hid2[1],
                          mcu_hid2[0],  mcu_hid2[8],
                          mcu_hid2[4],  mcu_hid2[5],
@@ -5916,6 +5932,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     wire signed [7:0] usb1_mdx, usb2_mdx, usb1_mdy, usb2_mdy;
     wire [7:0] usb1_mods, usb1_k1, usb1_k2, usb1_k3, usb1_k4;
     wire [7:0] usb2_mods, usb2_k1, usb2_k2, usb2_k3, usb2_k4;
+    wire [11:0] usb1_game, usb2_game;       // game_snes de cada host (clk_usb12)
     usb_hid_host usb_host1 (
         .usbclk (clk_usb12), .usbrst_n (pll12_lock),
         .usb_dm (usb1_dn), .usb_dp (usb1_dp),
@@ -5923,7 +5940,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .key_modifiers (usb1_mods),
         .key1 (usb1_k1), .key2 (usb1_k2), .key3 (usb1_k3), .key4 (usb1_k4),
         .mouse_btn (usb1_mbtn), .mouse_dx (usb1_mdx), .mouse_dy (usb1_mdy),
-        .game_snes (), .game_l (), .game_r (), .game_u (), .game_d (),
+        .game_snes (usb1_game), .game_l (), .game_r (), .game_u (), .game_d (),
         .game_a (), .game_b (), .game_x (), .game_y (), .game_sel (), .game_sta (),
         .game_lb (), .game_rb (),
         .dbg_hid_report ()
@@ -5935,11 +5952,24 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
         .key_modifiers (usb2_mods),
         .key1 (usb2_k1), .key2 (usb2_k2), .key3 (usb2_k3), .key4 (usb2_k4),
         .mouse_btn (usb2_mbtn), .mouse_dx (usb2_mdx), .mouse_dy (usb2_mdy),
-        .game_snes (), .game_l (), .game_r (), .game_u (), .game_d (),
+        .game_snes (usb2_game), .game_l (), .game_r (), .game_u (), .game_d (),
         .game_a (), .game_b (), .game_x (), .game_y (), .game_sel (), .game_sta (),
         .game_lb (), .game_rb (),
         .dbg_hid_report ()
     );
+
+    // 16/09: mandos HID por USB-A -> puerto 1 del MSX. Solo cuenta el host que
+    // tiene un mando (typ 3): al desenchufarlo typ vuelve a 0 y la palabra cae
+    // a cero aunque game_* se quedara con la ultima pulsacion. Dos FF en
+    // clk_54m para el cruce desde clk_usb12 (senal humana, cuasi-estatica).
+    wire [11:0] usb_game_raw = ((usb1_typ == 2'd3) ? usb1_game : 12'd0) |
+                               ((usb2_typ == 2'd3) ? usb2_game : 12'd0);
+    reg  [11:0] usb_game_s0 = 12'd0, usb_game_s1 = 12'd0;
+    always @(posedge clk_54m) begin
+        usb_game_s0 <= usb_game_raw;
+        usb_game_s1 <= usb_game_s0;
+    end
+    assign usb_joy_snes = usb_game_s1;
 
     // =======================================================================
     //  RATON MSX sobre raton USB — cruce de dominios e instancia
@@ -6044,6 +6074,7 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
 `else
     // Sin el companion no queda otra fuente: el teclado del MSX se apaga.
     assign keyboard = 128'd0;
+    assign usb_joy_snes = 12'd0;    // sin host en el fabric no hay mando por USB-A
 `endif
     // F1 (_73): el pad U15 (spi_irqn) se entrega a la UART del BL616 cuando el
     // WiFi onboard esta activo; el companion (ya sin SPI: jtagseln=0) pierde su
