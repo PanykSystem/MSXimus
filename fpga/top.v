@@ -5777,7 +5777,11 @@ reg [1:0]  sd_wr_seq     = 2'd0;    // rueda con cada escritura: una linea
     // telemetria UART: byte15 nibble alto = {pll27_lock, frame_cnt[2:0]},
     // lector tools/dbg_video_reader.py — diagnostico de HDMI sin cables).
     assign led[0] = turbo ? led_cnt[18] : led_cnt[20];  // VISIBLE (G11): rapido=turbo, lento=normal
-    assign led[1] = ~sd_busy_w;                         // VISIBLE (U12): actividad SD
+    // V3.6g: el LED de la SD hace ademas de chivato de la DDR3 de la VRAM: mientras
+    // la calibracion NO ha terminado parpadea solo (~3 Hz); calibrada, vuelve a ser
+    // la actividad de la SD. Un dado que arranca en negro con este LED parpadeando
+    // = la DDR3 no calibra en esa placa/alimentacion (no es el core MSX).
+    assign led[1] = vddr_rdy_s[1] ? ~sd_busy_w : led_cnt[19];   // VISIBLE (U12); [19] a 3,58 MHz = ~3,4 Hz
     assign led[5] = turbo ? 1'b0 : led_cnt[20];         // sin pin en el 60K (semantica nano conservada)
     assign led[4] = ~sd_busy_w;
     assign led[3] = ~joystick0[5];
