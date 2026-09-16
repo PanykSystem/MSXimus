@@ -132,7 +132,7 @@ Límite: el host del fabric es HID puro con el informe de los mandos genéricos 
 
 Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de agosto se compiló sin `usbh_initialize()`, la pila USB host, que se fue por delante al quitar los montajes de FatFs; ningún mando pudo funcionar nunca con esa release. Repuesta en 0219b25, y de paso la cruceta como hat switch y el recorte de ejes de más de 8 bits, portados de FPGA-Companion (7146b7c). Repositorio privado de respaldo `MSXimus-firmware-bl616`.
 
-Core: pendiente de la campaña v36h (dados 3607, 3613, 3617, 3623).
+Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h: el 3613 falló el gate (-0,05 ns en el OPL4), los otros dos pendientes al cerrar esto.
 
 ## Pendiente
 
