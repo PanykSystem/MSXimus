@@ -117,15 +117,20 @@ El módulo pone al Z80 en espera durante sus ciclos de E/S.
 
 Un segundo YM2149 completo, con la misma decodificación que el principal desplazada: 10h dirección, 11h escritura, 12h lectura. Para el software que espera un PSG ahí. (Con la opción `DIETA_V36H` desaparece y 12h lee FFh; en producción va.)
 
-### 2Dh-2Fh: diagnóstico y versión
+### 2Ah-2Fh: diagnóstico y versión
 
 | Puerto | Devuelve |
 |---|---|
+| 2Ah | Arranque de la DDR3 (v3.7b): décimas de segundo desde el encendido hasta que la VRAM calibró (255 = 25 s o más, o no ha calibrado) |
+| 2Bh | Arranque de la DDR3: duración en centésimas del intento de calibración que lo consiguió (255 = 2,55 s o más); sin calibrar, el intento en curso |
+| 2Ch | Arranque de la DDR3: bit 7 = calibrada; bits 6-0 = intentos de calibración fallidos antes (0 = a la primera, 127 = saturado) |
 | 2Dh | Estado del USB: bit 7 error de conexión en el USB 2, bit 6 en el USB 1, bits 5-4 tipo del USB 2 y bits 3-2 tipo del USB 1 (0 nada, 1 teclado, 2 ratón, 3 mando), bits 1-0 cuenta de informes recibidos, que cambia si el dispositivo habla |
 | 2Eh | Estado interno del ratón |
 | 2Fh | Versión del core, en BCD: 36h es la 3.6 |
 
 El menú de Ajustes muestra la versión leyendo 2Fh. Un core anterior a que existiera devuelve FFh, y el menú dice "desconocida".
+
+Los tres de la DDR3 son la respuesta al arranque en negro desde un cargador (capítulo 10 del manual): desde BASIC, `PRINT INP(&H2C) AND 127, INP(&H2B)*10, INP(&H2A)/10` dice cuántos intentos fallaron, cuántos milisegundos duró el bueno y a los cuántos segundos arrancó el vídeo.
 
 ### 34h-37h: DDR3 y cargador de ondas
 

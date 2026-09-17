@@ -134,6 +134,15 @@ Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de 
 
 Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h, cuatro dados: 3613 y 3607 fuera de gate (-0,05 y -1,87 ns en el motor del OPL4), 3617 con una red sin rutar. Sin respaldo. En la semana, once dados para tres útiles: al 98 % de CLS la campaña de tres ya no basta, y la de cuatro tampoco sobra.
 
+## v3.7b (17 de septiembre, noche; en campaña): la calibración de la DDR3 desde el cargador
+
+En placa, con el 4139: el arranque desde el cargador falla 3 de 5 veces (negro más de 10 s y después el menú sin el logo); el 4153 de respaldo, negro siempre, también desde el PC. En los dos, el LED U12 parpadea solo y más rápido con F11: es el chivato de la v3.6g (cuenta con el reloj de bus), es decir, **la DDR3 de la VRAM no calibra y el MSX corre por debajo**. Igual que el 3557 y el 3623; el 3593 y el 4001 calibran siempre. No es el BL616 (mismo firmware en todos) ni la colocación de la IP (idéntica en nueve dados, buenos y malos, según los informes): es la probabilidad de éxito de cada intento de calibración, que depende del dado y de la alimentación, la "lotería del ojo" de la saga de julio. Un dado que la tenía en ~1/7 (la _128Z) calibraba en 2 s; el 4153 la tiene en ~0.
+
+- **Motor de reintentos escalonado** (b5c15ee, `v9968_ddr3_backend`): 8 intentos de 335 ms como hasta ahora, 4 de 671 ms, 4 de 1,34 s y después de 2,68 s; a partir del 17º (~11 s fallando) el pulso de reset incluye el PLL de 297 MHz, que es lo que hace un apagado y encendido (el remedio de nand2mario para un fallo), y la IP no sale de reset hasta que el PLL reengancha. Nunca se toca nada *durante* un intento (lección de las _129). Un dado que calibra a la primera no nota nada.
+- **La espera del arranque pasa de 5 a 10 s**: sin vídeo no hay nada que hacer antes, y así un dado lento calibra sin que el MSX haya arrancado a ciegas y perdido el logo.
+- **Puertos 2Ah-2Ch**: intentos fallidos, duración del intento bueno y tiempo total, para que "falla 3 de 5" pase a ser un número por dado (y para saber si un intento normal tarda 30 ms o 300 ms).
+- Banco de pruebas del backend con la IP fallando 18 intentos seguidos: ventanas, resets del PLL y contadores como se espera; la suite T1-T9 sigue en verde.
+
 ## v3.7 (17 de septiembre): mezclador de audio por fuente
 
 Pedido de Albert la misma tarde en que la v3.6h arrancó desde el cargador ("ya que estamos"). Es el mezclador que la línea Zynq estrenó ese día (5d3b409), traído tal cual.
