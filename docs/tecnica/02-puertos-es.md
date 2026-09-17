@@ -7,7 +7,7 @@ Todos los puertos a los que responde el core, sacados del decodificador de `fpga
 | Puertos | Dispositivo | Estándar MSX |
 |---|---|---|
 | 06-07 | UART del ESP32 (WiFi UNAPI) | no |
-| 10-12 | ~~Segundo PSG~~ (retirado en la v3.6h; vacíos) | no |
+| 10-12 | Segundo PSG | no |
 | 2D-2F | Diagnóstico USB, diagnóstico del ratón, versión del core | no |
 | 34-37 | Diagnóstico de la DDR3 y del cargador de ondas | no |
 | 40-4F | E/S conmutada: configuración del core, SD por puertos, OCM, turbo Panasonic | OCM |
@@ -113,9 +113,9 @@ Es el puente `wifi_lite` de ducasp, agnóstico al módulo. Un byte por acceso, s
 
 El módulo pone al Z80 en espera durante sus ciclos de E/S.
 
-### 10h-12h: segundo PSG (retirado)
+### 10h-12h: segundo PSG
 
-Hasta la v3.6g, un segundo YM2149 completo con la misma decodificación que el principal desplazada: 10h dirección, 11h escritura, 12h lectura. En la v3.6h se retiró de la build de producción (dieta de área): 10h y 11h se ignoran y 12h lee FFh como cualquier puerto vacío. Sigue en el código tras `ENABLE_PSG2`.
+Un segundo YM2149 completo, con la misma decodificación que el principal desplazada: 10h dirección, 11h escritura, 12h lectura. Para el software que espera un PSG ahí. (Con la opción `DIETA_V36H` desaparece y 12h lee FFh; en producción va.)
 
 ### 2Dh-2Fh: diagnóstico y versión
 

@@ -43,7 +43,7 @@ Eso es un cambio en los cimientos, no en la superficie, y merecía número propi
 
 **WiFi** · UNAPI mediante un **ESP32-C6** externo, con **pantalla opcional** para información adicional
 
-**Extras** · Turbo Panasonic 5,37 MHz en **F11** · identificación de máquina estilo turboR · dos BIOS a elegir · logo de arranque · telemetría por puerto serie para diagnóstico (opción de build desde la v3.6)
+**Extras** · Turbo Panasonic 5,37 MHz en **F11** · identificación de máquina estilo turboR · dos BIOS a elegir · logo de arranque · control de ventilador por temperatura · telemetría por puerto serie para diagnóstico
 
 ## Hardware necesario
 

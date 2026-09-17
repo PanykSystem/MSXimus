@@ -62,6 +62,6 @@ Un fichero descargado se queda en `FHUNT` para siempre: la siguiente vez está e
 Si algo no va, en este orden:
 
 1. **La pantalla del módulo.** Si dice *Sin WiFi*, la red no está configurada o no llega; tecla W. Si dice *Conectado*, la red está bien.
-2. **El punto de actividad** de la pantalla. Si no parpadea cuando el MSX usa la red, el problema es el cable o el firmware, no la WiFi.
+2. **El punto de actividad** de la pantalla, o el LED de red de la tira de diagnóstico si se ha montado. Si no parpadea cuando el MSX usa la red, el problema es el cable o el firmware, no la WiFi.
 3. **Los cables TX y RX cruzados.** Es el error más común al montar: el TX del FPGA va al RX del módulo, IO17, y el RX del FPGA al TX del módulo, IO16.
 4. **La alimentación.** Con el módulo alimentado desde el J10 y a la vez por USB-C puede portarse raro; una sola fuente.
