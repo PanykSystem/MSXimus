@@ -5,6 +5,7 @@
 `define ENABLE_SCAN_LINES
 `define ENABLE_SDCARD
 `define ENABLE_CONFIG
+`define ENABLE_MIXER  //V3.7 (17/09/2026): mezclador por fuente (puerto #44 extendido) traido de la Zynq (5d3b409); niveles persistidos en la cola del pack (bytes 6..10)
 `define ENABLE_WAIT //extra wait state for mreq+wr
 //`define ENABLE_WAIT_ADAPTIVE //wait required
 `define ENABLE_M1_WAIT //STANDALONE: 1 wait-state per M1 opcode fetch (the real-MSX brake). Comment out to disable.
@@ -1044,7 +1045,7 @@ assign keyboard_addr = ppi_port_c[3:0];
     // version desemparejada. Es cosmetico -- el sistema arranca igual -- pero
     // hay que cerrarlo antes de publicar la 3.0.
     // V3.5 (06/09/2026): 0x30 -> 0x35. Ajustes lo muestra como "3.5".
-    localparam [7:0] FPGA_VERSION = 8'h36;   // V3.6: DMA de la SD (el 3529 entregado aun dice 35)
+    localparam [7:0] FPGA_VERSION = 8'h37;   // V3.7: mezclador por fuente (puerto #44). La 3.6 = DMA de la SD
     wire ver_req_r = (bus_iorq_n == 1'b0 && bus_m1_n == 1'b1 && bus_rd_n == 1'b0 && bus_addr[7:0] == 8'h2F);
 
     // Puerto 0x2E — DIAGNOSTICO DEL RATON. Desde BASIC: PRINT HEX$(INP(&H2E))
@@ -2907,6 +2908,34 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     // byte[5] del bloque de config de la flash (hoy sin usar, se escribe 0xFF).
     reg [2:0] snd_gain_ff = 3'd5;
 
+`ifdef ENABLE_MIXER
+    // ===== V3.7 MEZCLADOR POR FUENTE (17/09/2026; Albert: "un settings de volumenes de psg, scc, wave,
+    // opll, opl3 y opl4 wave"). Atenuador k/8 por fuente (k = 0..8: 8 = x1 = defecto, 0 = mudo) ANTES de
+    // la suma; la ganancia maestra (canal 0) y el limitador no cambian. Puerto #44 extendido:
+    //   OUT #44, {solo_sel[7], canal[6:4], nivel[3:0]}
+    //     canal 0 = ganancia maestra (nivel[2:0] = la tabla x1..x8 de siempre: el OUT #44,0..7 legado
+    //               sigue significando lo mismo)
+    //     1 = PSG, 2 = SCC, 3 = OPLL (FM-PAC), 4 = MSX-AUDIO (Y8950 + ADPCM), 5 = OPL4 FM (OPL3),
+    //     6 = OPL4 wave (PCM del MoonSound), 7 = WaveGame (solo ZYNQ: aqui se lee #F = "no existe"
+    //         y la escritura se ignora; el menu esconde la fila)
+    //     bit 7 = 1: no escribe nada, solo deja el canal seleccionado para la lectura
+    //   IN #44 -> {0, canal_sel[6:4], nivel[3:0]}; canal 0 -> {0, 000, 0, ganancia[2:0]} = la lectura
+    //   legada. SONDA del menu: OUT #44,#F0 + IN #44 = #7n con mezclador; un core sin el devuelve #0g.
+    //   Los niveles no se resetean (como snd_gain_ff): se siembran del bloque de config de la flash
+    //   (bytes 6..9 LE + 10 = xor ^ #A5, ver flash_write_din) y los guarda el Save & Restart del menu.
+    reg  [27:0] mix_lvl = 28'h8888888;   // canales 1..7, 4 bits cada uno en [(canal-1)*4 +: 4]
+    reg  [2:0]  mix_sel = 3'd0;          // canal seleccionado para la lectura
+    wire [3:0]  mix_rd  = (mix_sel == 3'd0) ? {1'b0, snd_gain_ff} :
+                          (mix_sel == 3'd7) ? 4'hF :              // Tang: sin WaveGame
+                          mix_lvl[{mix_sel - 3'd1, 2'b00} +: 4];
+    // La lectura va REGISTRADA a 27 MHz: la hoja 27->54 hacia cpu_din sigue siendo un FF
+    // (como snd_gain_ff antes) y el mux 8:1 de mix_sel no entra en la cadena de cpu_din
+    // (18,52 ns, la familia io40->cpu_din que ya dio -0,119 ns en un dado). El IN llega
+    // >= 1 us despues del OUT: 37 ns de retardo no se ven.
+    reg  [3:0]  mix_rd_r = 4'd0;
+    always @(posedge clk_27m) mix_rd_r <= mix_rd;
+`endif
+
 `ifdef ENABLE_SOUND
 
     //YM219 PSG
@@ -4337,21 +4366,65 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     // Y8950/ADPCM) pasa por gmul; el OPL4 (FM + wave) entra x1 DESPUES de la
     // ganancia. El mando del puerto #44 vuelve a significar lo que Albert
     // ajusto a oido: el volumen de los clasicos RESPECTO al MoonSound.
-    wire signed [18:0] mixL_st = {{2{psg1_ac[16]}}, psg1_ac}
-        + {{3{scc_term[15]}}, scc_term} + {{3{opll_term[15]}}, opll_term}
-        + {{3{y8950_wav[15]}}, y8950_wav} + {{3{y8950_adpcm_term[15]}}, y8950_adpcm_term};
-    wire signed [18:0] mixR_st = {{2{psg2_ac[16]}}, psg2_ac}
-        + {{3{scc2x_wav[14]}}, scc2x_wav, 1'b0} + {{3{opll_term[15]}}, opll_term}
-        + {{3{y8950_wav[15]}}, y8950_wav} + {{3{y8950_adpcm_term[15]}}, y8950_adpcm_term};
-    wire signed [18:0] mix_mono = {{2{psg1_ac[16]}}, psg1_ac}
-        + {{2{psg2_ac[16]}}, psg2_ac}
-        + {{3{scc_term[15]}}, scc_term} + {{3{scc2x_wav[14]}}, scc2x_wav, 1'b0}
-        + {{3{opll_term[15]}}, opll_term} + {{3{y8950_wav[15]}}, y8950_wav}
-        + {{3{y8950_adpcm_term[15]}}, y8950_adpcm_term};
-    // _180: suma propia del OPL4 (FM + wave), fuera de la ganancia maestra
-    wire signed [16:0] o4mix_l    = {opl4fm_term[15], opl4fm_term} + {opl4pcm_term_l[15], opl4pcm_term_l};
-    wire signed [16:0] o4mix_r    = {opl4fm_term[15], opl4fm_term} + {opl4pcm_term_r[15], opl4pcm_term_r};
-    wire signed [16:0] o4mix_mono = {opl4fm_term[15], opl4fm_term} + {opl4pcm_term[15], opl4pcm_term};
+    // V3.7 MEZCLADOR: cada fuente entra por su atenuador k/8 (mix_lvl, puerto #44 canales 1..6).
+    // mixk: v * k / 8 con k = 0..8 (8 = v intacto). Producto en 24 bits con signo (leccion _85/_115: nada
+    // de operandos unsigned en la expresion) y p[21:3] = p >>> 3 (|p| <= 2^21). Exacto en Icarus (Zynq).
+    function signed [18:0] mixk(input signed [18:0] v, input [3:0] k);
+        reg signed [23:0] p;
+        begin
+            p    = v * $signed({1'b0, k});
+            mixk = p[21:3];
+        end
+    endfunction
+`ifdef ENABLE_MIXER
+    // Las diez entradas del atenuador se REGISTRAN a clk_27m (libres, sin CE) antes del
+    // multiplicador: las fuentes viven en clk_54m y el camino 54->27 hasta snd_mix_* se tasa
+    // a 18,52 ns; con el DSP y las sumas dentro no cabria. Asi las fuentes llegan a un FF como
+    // antes (misma clase de camino que la suma vieja, menos logica) y el DSP + las sumas son
+    // 27->27 (37 ns). Un ciclo de 27 MHz de retardo para las diez a la vez: inaudible.
+    reg signed [18:0] mi_psg1 = 19'sd0, mi_psg2 = 19'sd0, mi_scc = 19'sd0, mi_scc2x = 19'sd0, mi_opll = 19'sd0,
+                      mi_y8950 = 19'sd0, mi_o4fm = 19'sd0, mi_o4pl = 19'sd0, mi_o4pr = 19'sd0, mi_o4pm = 19'sd0;
+    always @(posedge clk_27m) begin
+        mi_psg1  <= {{2{psg1_ac[16]}}, psg1_ac};
+        mi_psg2  <= {{2{psg2_ac[16]}}, psg2_ac};
+        mi_scc   <= {{3{scc_term[15]}}, scc_term};
+        mi_scc2x <= {{3{scc2x_wav[14]}}, scc2x_wav, 1'b0};
+        mi_opll  <= {{3{opll_term[15]}}, opll_term};
+        mi_y8950 <= {{3{y8950_wav[15]}}, y8950_wav} + {{3{y8950_adpcm_term[15]}}, y8950_adpcm_term};
+        mi_o4fm  <= {{3{opl4fm_term[15]}}, opl4fm_term};
+        mi_o4pl  <= {{3{opl4pcm_term_l[15]}}, opl4pcm_term_l};
+        mi_o4pr  <= {{3{opl4pcm_term_r[15]}}, opl4pcm_term_r};
+        mi_o4pm  <= {{3{opl4pcm_term[15]}}, opl4pcm_term};
+    end
+    wire signed [18:0] mx_psg1  = mixk(mi_psg1,  mix_lvl[3:0]);    // 1 PSG
+    wire signed [18:0] mx_psg2  = mixk(mi_psg2,  mix_lvl[3:0]);
+    wire signed [18:0] mx_scc   = mixk(mi_scc,   mix_lvl[7:4]);    // 2 SCC
+    wire signed [18:0] mx_scc2x = mixk(mi_scc2x, mix_lvl[7:4]);
+    wire signed [18:0] mx_opll  = mixk(mi_opll,  mix_lvl[11:8]);   // 3 OPLL
+    wire signed [18:0] mx_y8950 = mixk(mi_y8950, mix_lvl[15:12]);  // 4 MSX-AUDIO (Y8950 + ADPCM)
+    wire signed [18:0] mx_o4fm  = mixk(mi_o4fm,  mix_lvl[19:16]);  // 5 OPL4 FM
+    wire signed [18:0] mx_o4pl  = mixk(mi_o4pl,  mix_lvl[23:20]);  // 6 OPL4 wave
+    wire signed [18:0] mx_o4pr  = mixk(mi_o4pr,  mix_lvl[23:20]);
+    wire signed [18:0] mx_o4pm  = mixk(mi_o4pm,  mix_lvl[23:20]);
+`else
+    wire signed [18:0] mx_psg1  = {{2{psg1_ac[16]}}, psg1_ac};
+    wire signed [18:0] mx_psg2  = {{2{psg2_ac[16]}}, psg2_ac};
+    wire signed [18:0] mx_scc   = {{3{scc_term[15]}}, scc_term};
+    wire signed [18:0] mx_scc2x = {{3{scc2x_wav[14]}}, scc2x_wav, 1'b0};
+    wire signed [18:0] mx_opll  = {{3{opll_term[15]}}, opll_term};
+    wire signed [18:0] mx_y8950 = {{3{y8950_wav[15]}}, y8950_wav} + {{3{y8950_adpcm_term[15]}}, y8950_adpcm_term};
+    wire signed [18:0] mx_o4fm  = {{3{opl4fm_term[15]}}, opl4fm_term};
+    wire signed [18:0] mx_o4pl  = {{3{opl4pcm_term_l[15]}}, opl4pcm_term_l};
+    wire signed [18:0] mx_o4pr  = {{3{opl4pcm_term_r[15]}}, opl4pcm_term_r};
+    wire signed [18:0] mx_o4pm  = {{3{opl4pcm_term[15]}}, opl4pcm_term};
+`endif
+    wire signed [18:0] mixL_st  = mx_psg1 + mx_scc + mx_opll + mx_y8950;
+    wire signed [18:0] mixR_st  = mx_psg2 + mx_scc2x + mx_opll + mx_y8950;
+    wire signed [18:0] mix_mono = mx_psg1 + mx_psg2 + mx_scc + mx_scc2x + mx_opll + mx_y8950;
+    // _180: suma propia del OPL4 (FM + wave), fuera de la ganancia maestra (|fm| < 2^15, |pcm| < 2^14: cabe en 17)
+    wire signed [16:0] o4mix_l    = $signed(mx_o4fm[16:0]) + $signed(mx_o4pl[16:0]);
+    wire signed [16:0] o4mix_r    = $signed(mx_o4fm[16:0]) + $signed(mx_o4pr[16:0]);
+    wire signed [16:0] o4mix_mono = $signed(mx_o4fm[16:0]) + $signed(mx_o4pm[16:0]);
     // _127H: TONO DE TEST del bug #14 (440Hz cuadrada -12dB directa al puente,
     // puenteando el mezclador). DESARMADO en release (niquelado B, bug #4 del
     // informe): iba colgado del toggle "Sprite Limit" del menu (config2[3]) y
@@ -4598,6 +4671,9 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
                 config2_ff <= CONFIG2_DEFAULT;
                 config_turbo_boot_ff <= 0;      // rescate S2: boot turbo off
                 snd_gain_ff <= 3'd5;            // rescate S2: ganancia por defecto x5
+`ifdef ENABLE_MIXER
+                mix_lvl <= 28'h8888888;         // rescate S2: mezclador a 8/8 (como la ganancia)
+`endif
             end
             else begin
                 config1_ff <= config_sig[2];
@@ -4606,6 +4682,12 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
                 // byte[5] de la flash: 0xC0..0xC7 = ganancia valida; 0xFF/0x00
                 // (bloques legados) => defecto x3. Mismo patron que 'T'=0x54.
                 snd_gain_ff <= (config_sig[5][7:3] == 5'b11000) ? config_sig[5][2:0] : 3'd5;
+`ifdef ENABLE_MIXER
+                // V3.7: bytes 6..9 = niveles LE, 10 = xor ^ A5. Un bloque de 6 bytes
+                // (flash borrada detras: FF FF FF FF FF -> xor = A5 != FF) o uno con un
+                // nivel > 8 va a los defectos 8/8.
+                mix_lvl <= cfg_mix_ok ? cfg_mix_lvl : 28'h8888888;
+`endif
             end
         end
         // escritura del puerto #45 (menu): mismo bloque que la carga init para un
@@ -4615,7 +4697,16 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
             config_turbo_boot_ff <= cpu_dout[0];
         end
         if (config4_req == 1 ) begin
+`ifdef ENABLE_MIXER
+            mix_sel <= cpu_dout[6:4];           // V3.7: {solo_sel, canal, nivel} (ver mix_lvl)
+            if (!cpu_dout[7]) begin
+                if (cpu_dout[6:4] == 3'd0) snd_gain_ff <= cpu_dout[2:0];
+                else if (cpu_dout[6:4] != 3'd7)   // 7 = WaveGame: no existe en el Tang
+                    mix_lvl[{cpu_dout[6:4] - 3'd1, 2'b00} +: 4] <= (cpu_dout[3:0] > 4'd8) ? 4'd8 : cpu_dout[3:0];
+            end
+`else
             snd_gain_ff <= cpu_dout[2:0];       // _161: ganancia de audio 0..7
+`endif
         end
         if (config_update == 1) begin
             config1_ff <= config1_temp_ff;
@@ -4674,7 +4765,11 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
                          ( bus_addr[3:0] == 4'h1 ) ? config1_ff :
                          ( bus_addr[3:0] == 4'h2 ) ? config2_ff :
                          ( bus_addr[3:0] == 4'h3 ) ? config3_ff :
+`ifdef ENABLE_MIXER
+                         ( bus_addr[3:0] == 4'h4 ) ? {1'b0, mix_sel, mix_rd_r} : // V3.7: canal seleccionado + su nivel
+`else
                          ( bus_addr[3:0] == 4'h4 ) ? {5'b0, snd_gain_ff} :
+`endif
                          ( bus_addr[3:0] == 4'h5 ) ? {7'b0, config_turbo_boot_ff} :
                          ( bus_addr[3:0] == 4'h6 ) ? { 1'b1, config6_ff[6:0] } :   // V3.5f: bit7 = 1 -> "este core trae el Game Master 2" (el menu lo sondea)
                 `ifdef ENABLE_SDCARD
@@ -4751,15 +4846,18 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     //  LAYOUT DE FLASH DE LA CONSOLE 60K (W25Q64, 8 MB, compartida BL616):
     //    0x000000 - 0x3FFFFF  bitstream GW5AT-60 (.bin = ~2.26 MB; margen a 4 MB)
     //    0x400000 - 0x47FFFF  pack BIOS (512 KB)          <- antes 0x200000 (TN20K)
-    //    0x480000 - 0x480005  config (6 bytes, cola del pack) <- antes 0x280000
-    //    0x480006 - 0x7FFFFF  libre (~3.5 MB: futuro SRM/ROMs)
+    //    0x480000 - 0x48000A  config (11 bytes, cola del pack) <- antes 0x280000
+    //                         'A','B', config1, config2, 'T'/00, C0|ganancia,
+    //                         V3.7: niveles del mezclador LE (4 bytes), xor ^ A5
+    //    0x48000B - 0x7FFFFF  libre (~3.5 MB: futuro SRM/ROMs)
     //  El bitstream del GW5AT-60 PISA el 0x200000 del TN20K (aviso del audit
     //  §5.B confirmado). El pack se flashea ahora en 0x400000.
     // ------------------------------------------------------------------
     localparam FLASH_START_ADDRESS = 24'h400000;
     localparam FLASH_CONFIG_ADDRESS = 24'h480000;   // = FLASH_START + 512KB
     localparam RAM_START_ADDRESS = 23'h6fffff;
-    localparam GOAULD_ROM_SIZE = 512*1024 + 6; //512KB + signature (AB) + config
+    localparam CONFIG_BYTES    = 11;           // V3.7: 6 de siempre + 4 niveles + xor
+    localparam GOAULD_ROM_SIZE = 512*1024 + CONFIG_BYTES; //512KB + signature (AB) + config
     reg ff_rom_wr = 0;
     reg [24:0] ff_rom_addr;
     
@@ -4791,12 +4889,25 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
                              (flash_write_counter == 8'd02) ? config1_ff :
                              (flash_write_counter == 8'd03) ? config2_ff :
                              (flash_write_counter == 8'd04) ? (config_turbo_boot_ff ? 8'h54 : 8'h00) :
-                             (flash_write_counter == 8'd05) ? {5'b11000, snd_gain_ff} : 8'hff;
+                             (flash_write_counter == 8'd05) ? {5'b11000, snd_gain_ff} :
+                        `ifdef ENABLE_MIXER
+                             // V3.7: niveles 1..7 (28 bits LE) + xor ^ A5 como suma
+                             (flash_write_counter == 8'd06) ? mix_lvl[7:0] :
+                             (flash_write_counter == 8'd07) ? mix_lvl[15:8] :
+                             (flash_write_counter == 8'd08) ? mix_lvl[23:16] :
+                             (flash_write_counter == 8'd09) ? {4'b0, mix_lvl[27:24]} :
+                             (flash_write_counter == 8'd10) ? (mix_lvl[7:0] ^ mix_lvl[15:8] ^ mix_lvl[23:16] ^ {4'b0, mix_lvl[27:24]} ^ 8'hA5) :
+                        `endif
+                             8'hff;
                         `else
                              (flash_write_counter == 8'd02) ? CONFIG1_DEFAULT :
                              (flash_write_counter == 8'd03) ? CONFIG2_DEFAULT : 8'hff;
                         `endif
-    assign flash_write_terminate = (flash_write_counter == 8'd6) ? 1 : 0;
+    // flash_rw evalua terminate DESPUES de incrementar: manda CONFIG_BYTES+1 bytes, el
+    // ultimo el FF del defecto (= flash borrada, inocuo). Con 6 bytes ya mandaba 7. El
+    // lector solo captura CONFIG_BYTES. Y el guardado BORRA el sector de 4 KB entero
+    // (0x480000-0x480FFF): lo "libre" de verdad empieza en 0x481000.
+    assign flash_write_terminate = (flash_write_counter == CONFIG_BYTES) ? 1 : 0;
 
     flash # (
         .STARTUP_WAIT(1)
@@ -4941,36 +5052,45 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
         endcase
     end
 
-    // configuration + signature
-    reg [7:0] config_sig [0:5];
-    reg [2:0] last_bytes_cnt;
+    // configuration + signature (la cola del pack: CONFIG_BYTES bytes tras los 512 KB)
+    reg [7:0] config_sig [0:CONFIG_BYTES-1];
+    reg [3:0] last_bytes_cnt;
+    reg [3:0] cfg_init_sr = 4'd0;
     wire new_byte;
     wire config_init;
     assign new_byte = (~ff_flash_rd && flash_busy == 0);
-    assign config_init = (config_sig[0] == 8'h41 && config_sig[1] == 8'h42 && last_bytes_cnt == 3'd1) ? 1 : 0;
+    // V3.7: config_init es un PULSO de 4 ciclos (2 de clk_27m) que arranca en el
+    // ciclo siguiente a la captura del ULTIMO byte, con todo config_sig ya
+    // estable. Antes era "last_bytes_cnt == 1", que es la ventana ENTRE la
+    // captura del penultimo byte y la del ultimo: los consumidores (27 MHz)
+    // leian el ultimo byte (la ganancia, byte 5) todavia viejo. Con 6 bytes
+    // solo se perdia la ganancia; con los niveles del mezclador detras no vale.
+    assign config_init = (config_sig[0] == 8'h41 && config_sig[1] == 8'h42 && cfg_init_sr[0]) ? 1 : 0;
+`ifdef ENABLE_MIXER
+    wire [27:0] cfg_mix_lvl = {config_sig[9][3:0], config_sig[8], config_sig[7], config_sig[6]};
+    wire        cfg_mix_ok  = ((config_sig[6] ^ config_sig[7] ^ config_sig[8] ^ config_sig[9] ^ 8'hA5) == config_sig[10])
+                              && (config_sig[9][7:4] == 4'd0)
+                              && (cfg_mix_lvl[3:0] <= 4'd8) && (cfg_mix_lvl[7:4] <= 4'd8) && (cfg_mix_lvl[11:8] <= 4'd8)
+                              && (cfg_mix_lvl[15:12] <= 4'd8) && (cfg_mix_lvl[19:16] <= 4'd8) && (cfg_mix_lvl[23:20] <= 4'd8)
+                              && (cfg_mix_lvl[27:24] <= 4'd8);
+`endif
 
+    integer cfg_i;
     always @(posedge clk_54m or negedge reset3_n) begin
         if (!reset3_n) begin
-            last_bytes_cnt <= 3'd0;
-            config_sig[0] <= 8'd0;
-            config_sig[1] <= 8'd0;
-            config_sig[2] <= 8'd0;
-            config_sig[3] <= 8'd0;
-            config_sig[4] <= 8'd0;
-            config_sig[5] <= 8'd0;
+            last_bytes_cnt <= 4'd0;
+            cfg_init_sr    <= 4'd0;
+            for (cfg_i = 0; cfg_i < CONFIG_BYTES; cfg_i = cfg_i + 1)
+                config_sig[cfg_i] <= 8'd0;
         end else begin
-            if (ff_flash_counter == 32'd6)
-                last_bytes_cnt <= 3'd6;
-            if (new_byte && last_bytes_cnt != 3'd0) begin
-                case (last_bytes_cnt)
-                    3'd6: config_sig[0] <= flash_dout;
-                    3'd5: config_sig[1] <= flash_dout;
-                    3'd4: config_sig[2] <= flash_dout;
-                    3'd3: config_sig[3] <= flash_dout;
-                    3'd2: config_sig[4] <= flash_dout;
-                    3'd1: config_sig[5] <= flash_dout;
-                endcase
-                last_bytes_cnt <= last_bytes_cnt - 1;
+            cfg_init_sr <= {1'b0, cfg_init_sr[3:1]};
+            if (ff_flash_counter == CONFIG_BYTES)
+                last_bytes_cnt <= CONFIG_BYTES;
+            if (new_byte && last_bytes_cnt != 4'd0) begin
+                config_sig[CONFIG_BYTES - last_bytes_cnt] <= flash_dout;
+                if (last_bytes_cnt == 4'd1)
+                    cfg_init_sr <= 4'b1111;
+                last_bytes_cnt <= last_bytes_cnt - 4'd1;
             end
         end
     end

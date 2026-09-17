@@ -33,13 +33,15 @@ El MoonSound tiene sus propios canales izquierdo y derecho y en estéreo los sac
 
 Cada chip entra al mezclador a su nivel real, medido contra openMSX, y el conjunto lleva una **ganancia maestra** para el grupo clásico (PSG, SCC, OPLL, MSX-Audio) que sirve para ponerlos a la altura del MoonSound, que suena más fuerte de origen. Va de 0 a 7, el valor de fábrica es 5, y se guarda en la flash.
 
-No hay opción de menú para cambiarla: se escribe en el puerto 44h del dispositivo de configuración y se guarda con la orden de Ajustes. Desde BASIC, para dejarla en 4:
+Desde la v3.7 hay además un **mezclador por chip**: cada fuente (PSG, SCC, OPLL, MSX-Audio, OPL4 FM y OPL4 wave) tiene su nivel de 0 a 8 octavos antes de la suma, 8 = tal cual, 0 = muda. Se ajusta en **Ajustes → Mezclador de audio** (arriba/abajo elige el canal, izquierda/derecha mueve el nivel y suena una nota de prueba en ese chip; ESC vuelve) y se guarda con *Save & Restart*. La ganancia maestra es la primera fila de esa misma página.
+
+Por puerto, para el que quiera hacerlo desde BASIC: el 44h del dispositivo de configuración recibe `{canal, nivel}`: canal 0 es la ganancia maestra (0-7), 1-6 los chips en ese orden (nivel 0-8). Para dejar la ganancia en 4 y el PSG a la mitad:
 
 ```basic
-OUT &H40,&H48 : OUT &H44,4 : OUT &H42,INP(&H42) OR &HC0
+OUT &H40,&H48 : OUT &H44,4 : OUT &H44,&H14 : OUT &H42,INP(&H42) OR &HC0
 ```
 
-La ganancia cambia en el acto con la segunda orden; la tercera la guarda en la flash y reinicia la máquina, igual que Save & Restart. El mezclador satura suavemente en vez de recortar: con la ganancia alta y muchos chips a la vez se comprime, no distorsiona a saco.
+Los niveles cambian en el acto; la última orden los guarda en la flash y reinicia la máquina, igual que Save & Restart. El mezclador satura suavemente en vez de recortar: con la ganancia alta y muchos chips a la vez se comprime, no distorsiona a saco.
 
 ## 4. Lo que se comprobó en placa
 

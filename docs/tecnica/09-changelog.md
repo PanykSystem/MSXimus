@@ -134,6 +134,16 @@ Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de 
 
 Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h, cuatro dados: 3613 y 3607 fuera de gate (-0,05 y -1,87 ns en el motor del OPL4), 3617 con una red sin rutar. Sin respaldo. En la semana, once dados para tres útiles: al 98 % de CLS la campaña de tres ya no basta, y la de cuatro tampoco sobra.
 
+## v3.7 (17 de septiembre, en campaña): mezclador de audio por fuente
+
+Pedido de Albert la misma tarde en que la v3.6h arrancó desde el cargador ("ya que estamos"). Es el mezclador que la línea Zynq estrenó ese día (5d3b409), traído tal cual:
+
+- **Puerto 44h extendido**: `{solo_sel, canal, nivel}`. Canal 0 = la ganancia maestra de siempre (compatible con `OUT 44h,0..7`), 1-6 = PSG, SCC, OPLL, MSX-Audio, OPL4 FM, OPL4 wave con nivel 0-8 = k/8 aplicado a cada fuente **antes** de la suma; el 7 (WaveGame) no existe en el Tang (lee Fh, la escritura se ignora, el menú esconde la fila porque el 2Fh es < A0h). Lectura `{0, canal, nivel}` y sonda `OUT 44h,F0h`. Los diez multiplicadores 19×4 caen en DSP (MULTALU27X18: 8 → 18 de 118): LUT +94, ALU −47, es decir, área neutra.
+- **Persistencia en la cola del pack**: el bloque de configuración de la flash (0x480000) pasa de 6 a 11 bytes: los 6 de siempre, los 28 bits de niveles en little-endian y un byte de suma (xor ^ A5h). Un bloque viejo de 6 bytes (flash borrada detrás) siembra lo de siempre y deja el mezclador a 8/8; un bloque con la suma mal o un nivel > 8, igual. Testbench en Icarus de la captura y la siembra (cinco escenarios).
+- **Error latente arreglado**: `config_init` era la ventana *entre* la captura del penúltimo byte y la del último, así que los consumidores a 27 MHz leían el último byte viejo. Con 6 bytes ese último era la ganancia maestra: probablemente nunca se sembró de la flash en el Tang (nadie lo notó porque el defecto x5 es el valor que se usa). Ahora es un pulso de 4 ciclos tras el último byte, con todo estable; el testbench reproduce el fallo con la ventana vieja.
+- El menú (bios 5568de4 + d991daa): fila *Mezclador de audio* en Ajustes con la página de ocho filas, barra de octavos y nota de prueba por chip; en el Tang sin mezclador (3.6h) ofrece solo la ganancia maestra. Los packs nuevos llevan además el arreglo de los SSID en kana del setup WiFi (724ba64).
+- Versión del core en el 2Fh: 37h.
+
 ## v3.6h (17 de septiembre): generación C del V9968 y espera a la DDR3
 
 La última build de la era v3 por decisión de Albert: después de esta, solo errores graves.

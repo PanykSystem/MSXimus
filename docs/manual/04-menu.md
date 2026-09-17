@@ -128,6 +128,7 @@ La pantalla **MSXimus - Ajustes** tiene estas opciones:
 | **Stereo Sound** | On / Off | Sonido en estéreo |
 | **Boot Turbo** | On / Off | Arrancar siempre con la CPU a 5,37 MHz. Solo entra en un arranque en frío: hay que apagar y encender, no basta el reset |
 | **Menú al arrancar** | On / Off | Si aparece el navegador de la SD al encender o se arranca MSX-DOS directamente |
+| **Mezclador de audio** | | Abre la página del mezclador (v3.7): la ganancia maestra y el nivel de cada chip, con nota de prueba. Ver el [capítulo 08](08-audio.md) |
 | **Save & Restart** | | Guardar en la flash y reiniciar |
 
 Debajo se muestra *"Version FPGA (.fs): x.y"*, la versión del core que hay flasheado, o *"desconocida"* si el core no la publica.
