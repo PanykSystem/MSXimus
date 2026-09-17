@@ -4676,6 +4676,14 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     end
 
     reg config_init_delay = 0;
+`ifdef ENABLE_MIXER
+    reg       cfg4_req_r  = 1'b0;   // V3.7: etapa de registro del OUT #44 (ver abajo)
+    reg [7:0] cfg4_dout_r = 8'd0;
+    always @ (posedge clk_27m) begin
+        cfg4_req_r  <= config4_req;
+        cfg4_dout_r <= cpu_dout;
+    end
+`endif
     always @ (posedge clk_27m) begin
         config_init_delay <= config_init;
         if (config_init == 1 ) begin
@@ -4709,18 +4717,25 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
         if (config5_req == 1 ) begin
             config_turbo_boot_ff <= cpu_dout[0];
         end
-        if (config4_req == 1 ) begin
 `ifdef ENABLE_MIXER
-            mix_sel <= cpu_dout[6:4];           // V3.7: {solo_sel, canal, nivel} (ver mix_lvl)
-            if (!cpu_dout[7]) begin
-                if (cpu_dout[6:4] == 3'd0) snd_gain_ff <= cpu_dout[2:0];
-                else if (cpu_dout[6:4] != 3'd7)   // 7 = WaveGame: no existe en el Tang
-                    mix_lvl[{cpu_dout[6:4] - 3'd1, 2'b00} +: 4] <= (cpu_dout[3:0] > 4'd8) ? 4'd8 : cpu_dout[3:0];
+        // V3.7: la escritura del #44 va con UNA ETAPA de registro (cfg4_req_r/cfg4_dout_r,
+        // capturados juntos): el decodificador del OUT (WR_n del T80 -> config4_req ->
+        // canal -> CE de 28 FF de mix_lvl) salio a -0,154 ns en el 4133 (cruce 54 -> 27 de
+        // 9,26 ns). El OUT dura ~20 ciclos de 27 MHz y el par (req, dato) se relatchea
+        // coherente cada ciclo, asi que llegar un ciclo tarde no cambia nada.
+        if (cfg4_req_r == 1 ) begin
+            mix_sel <= cfg4_dout_r[6:4];        // {solo_sel, canal, nivel} (ver mix_lvl)
+            if (!cfg4_dout_r[7]) begin
+                if (cfg4_dout_r[6:4] == 3'd0) snd_gain_ff <= cfg4_dout_r[2:0];
+                else if (cfg4_dout_r[6:4] != 3'd7)   // 7 = WaveGame: no existe en el Tang
+                    mix_lvl[{cfg4_dout_r[6:4] - 3'd1, 2'b00} +: 4] <= (cfg4_dout_r[3:0] > 4'd8) ? 4'd8 : cfg4_dout_r[3:0];
             end
-`else
-            snd_gain_ff <= cpu_dout[2:0];       // _161: ganancia de audio 0..7
-`endif
         end
+`else
+        if (config4_req == 1 ) begin
+            snd_gain_ff <= cpu_dout[2:0];       // _161: ganancia de audio 0..7
+        end
+`endif
         if (config_update == 1) begin
             config1_ff <= config1_temp_ff;
             config2_ff <= config2_temp_ff;
