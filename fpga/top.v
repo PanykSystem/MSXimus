@@ -2713,6 +2713,10 @@ wire [11:0] usb_joy_snes;
     // mitad baja sigue en el banco C: todo lo de <=2 MB cae en las mismas
     // direcciones fisicas que antes. Sin sumador: A21 elige {~A21, A21}.
 
+    reg cpu_run_r = 1'b0;   // V3.7: ver .cpu_run() de mem1
+    always @(posedge clk_54m)
+        cpu_run_r <= bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok;
+
     // V3.6: el camino "stream" (CPU parada) lo comparten el streamer de la flash
     // del arranque y la DMA de la SD. El mux de arriba sigue siendo de dos ramas:
     // la eleccion flash/DMA va por debajo, sobre registros, fuera del cono de la CPU.
@@ -2858,7 +2862,16 @@ memory_ctrl #(.SDCLK_INVERT(1'b1)) mem1 (
     // puede disparar cuando el Z80 esta provadamente parado (ver memory.v)
     // V3.6: con la DMA, el refresco autonomo SOLO en sus ventanas de espera (dma_rfsh_ok),
     // nunca durante la rafaga de escrituras (memory.v _175/_181: pisaria una aceptacion)
-    .cpu_run(bus_reset_n & reset3_n & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok),
+    // V3.7 (vuelve la V3.6d, 74f95de): el termino va REGISTRADO a clk_54m. Juntaba seis
+    // senales de clk_54m y entraba combinacional al RESET de rfsh_gap/rfsh_auto (clk_108m):
+    // un cruce 54 -> 108 con 9,26 ns que ha sido EL peor camino de casi todos los dados
+    // (0,913 y 0,039 en v36c; 0,771 en el 4001; 0,005 y -0,006 en v36q; -1,1/-3,1/-1,2 en
+    // tres de los cuatro dados rutados de v37a). La V3.6d se retiro por el 3557 negro desde
+    // el cargador, que resulto ser la calibracion de la DDR3 (3623 sin ella tambien negro;
+    // con la espera de la 3.6g el 4001 arranca). memory.v lo resincroniza ademas a 108 MHz:
+    // el cruce queda FF -> FF sin logica. El retraso (~37 ns) es inocuo en los dos sentidos
+    // (el T80 tarda >= 280 ns en su primer ciclo de bus; sd_dma espera 40 ciclos en S_GUARD).
+    .cpu_run(cpu_run_r),
 
     .ram_dout(ram_dout),
     .vram_dout(VrmDbi2),
