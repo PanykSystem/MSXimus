@@ -134,9 +134,11 @@ Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de 
 
 Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h, cuatro dados: 3613 y 3607 fuera de gate (-0,05 y -1,87 ns en el motor del OPL4), 3617 con una red sin rutar. Sin respaldo. En la semana, once dados para tres útiles: al 98 % de CLS la campaña de tres ya no basta, y la de cuatro tampoco sobra.
 
-## v3.7 (17 de septiembre, en campaña): mezclador de audio por fuente
+## v3.7 (17 de septiembre): mezclador de audio por fuente
 
-Pedido de Albert la misma tarde en que la v3.6h arrancó desde el cargador ("ya que estamos"). Es el mezclador que la línea Zynq estrenó ese día (5d3b409), traído tal cual:
+Pedido de Albert la misma tarde en que la v3.6h arrancó desde el cargador ("ya que estamos"). Es el mezclador que la línea Zynq estrenó ese día (5d3b409), traído tal cual.
+
+Core: dado 4139, 6175b7c5, margen **2,012 ns** (uadpcm, clk_54m), el mejor de la era v3; holds solo la IP DDR3 (0,040). RTL = 82b1b9c (el HEAD 4c163f7 solo añade una etapa de registro en la escritura del 44h, sin cambio funcional). Campaña v37c, cinco dados: 4129 sin rutar, 4133 −0,154 ns en el decodificador del 44h (por eso el registro del HEAD), **4139, 4153 (1,243 ns) y 4157 (1,130 ns) pasan el gate**: 3 de 5, contra el 1 de 5 habitual, por el cierre del cruce de `cpu_run` (abajo). Respaldo: 4153. Packs nuevos obligatorios para ver la página (bios 6db0cf8: 2.1.4 fb9b6c38, Nextor 3 10321483).
 
 - **Puerto 44h extendido**: `{solo_sel, canal, nivel}`. Canal 0 = la ganancia maestra de siempre (compatible con `OUT 44h,0..7`), 1-6 = PSG, SCC, OPLL, MSX-Audio, OPL4 FM, OPL4 wave con nivel 0-8 = k/8 aplicado a cada fuente **antes** de la suma; el 7 (WaveGame) no existe en el Tang (lee Fh, la escritura se ignora, el menú esconde la fila porque el 2Fh es < A0h). Lectura `{0, canal, nivel}` y sonda `OUT 44h,F0h`. Los diez multiplicadores 19×4 caen en DSP (MULTALU27X18: 8 → 18 de 118): LUT +94, ALU −47, es decir, área neutra.
 - **Persistencia en la cola del pack**: el bloque de configuración de la flash (0x480000) pasa de 6 a 11 bytes: los 6 de siempre, los 28 bits de niveles en little-endian y un byte de suma (xor ^ A5h). Un bloque viejo de 6 bytes (flash borrada detrás) siembra lo de siempre y deja el mezclador a 8/8; un bloque con la suma mal o un nivel > 8, igual. Testbench en Icarus de la captura y la siembra (cinco escenarios).
@@ -144,7 +146,7 @@ Pedido de Albert la misma tarde en que la v3.6h arrancó desde el cargador ("ya 
 - El menú (bios 5568de4 + d991daa): fila *Mezclador de audio* en Ajustes con la página de ocho filas, barra de octavos y nota de prueba por chip; en el Tang sin mezclador (3.6h) ofrece solo la ganancia maestra. Los packs nuevos llevan además el arreglo de los SSID en kana del setup WiFi (724ba64).
 - Versión del core en el 2Fh: 37h.
 - **El peor camino de todos los dados, cerrado** (82b1b9c): el término del refresco autónomo (`cpu_run` = reset & flash_idle & esp_boot_ok & ~iosys_frz & ~dma_rfsh_ok) entraba combinacional desde clk_54m al RESET de los contadores de refresco de la SDRAM en clk_108m, un cruce de 9,26 ns. Fue el peor camino del 4001 (0,771 ns), de los dos marginales de la v36q y tumbó tres de los cuatro dados rutados de la v37a (−1,1, −3,1, −1,2 ns). Vuelve el registro a 54 MHz de la v3.6d (retirada por un negro que resultó ser la DDR3) y `memory.v` lo resincroniza con dos FF a 108 MHz: el cruce es FF → FF sin lógica. El retraso de ~37 ns es inocuo (el T80 tarda ≥ 280 ns en su primer ciclo de bus; la DMA espera 40 ciclos antes de escribir); `tools/sdr16_tb` pasa entero (TZ: 0 refrescos autónomos con el Z80 vivo).
-- Campaña v37a (4049-4079, RTL sin ese registro): 4 de 5 rutaron (el mezclador no estorba al rutado), 3 tumbados por ese camino y 4057 por −0,3 ns en `cpu1 → ff_sd_sector`. v37b abortada; v37c/v37d (4129-4217) con el registro.
+- Campaña v37a (4049-4079, RTL sin ese registro): 4 de 5 rutaron (el mezclador no estorba al rutado), 3 tumbados por ese camino y 4057 por −0,3 ns en `cpu1 → ff_sd_sector`. v37b abortada; v37c con el registro dio los tres dados de arriba.
 
 ## v3.6h (17 de septiembre): generación C del V9968 y espera a la DDR3
 
