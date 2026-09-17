@@ -38,7 +38,10 @@ $log = Join-Path $Scratch "encadenadas_$Etiqueta.txt"
 $Campanas = Get-Content $Json -Raw | ConvertFrom-Json
 function Nota([string]$s) { $l = ("{0}  {1}" -f (Get-Date -Format 'HH:mm:ss'), $s); Add-Content -Path $log -Value $l; Write-Output $l }
 # 17/09: el runner de noche17 murio en silencio al pasar de v36n a v36o (la
-# carpeta v36o ni se creo); que al menos quede la excepcion en el log.
+# carpeta v36o ni se creo). Causa: la variable del bucle se llamaba $root y en
+# PowerShell $root y $Root SON LA MISMA: la primera campana po2 machacaba la
+# ruta del repo y la siguiente llamada a tools\... apuntaba a la copia. Ahora
+# se llama $arbol y cualquier excepcion queda en el log.
 trap { Nota ("EXCEPCION: {0}`r`n{1}" -f $_, $_.ScriptStackTrace); break }
 
 # variante place_option 2: copia del arbol con el build.tcl tocado
@@ -63,14 +66,14 @@ foreach ($c in $Campanas) {
     }
     # "Root" en la entrada = arbol propio (p.ej. una copia de otro commit para
     # una campana de control); si no, po1 = repo, po2 = la copia con place_option 2
-    $root = if ($c.Root) { $c.Root } elseif ($c.Variante -eq 'po2') { $rootPo2 } else { $Root }
+    $arbol = if ($c.Root) { $c.Root } elseif ($c.Variante -eq 'po2') { $rootPo2 } else { $Root }
     if ($c.SoloGate) {
         # campana lanzada a mano (o por un runner anterior que murio): no se
         # relanza, solo se espera a que acabe y se pasa el gate
         Nota ("campana {0} ya lanzada: solo espero y paso el gate" -f $c.Nombre)
     } else {
         Nota ("campana {0} ({1}) dados {2}" -f $c.Nombre, $c.Variante, ($c.Dados -join ','))
-        & (Join-Path $Root 'tools\lanzar_campana.ps1') -Campana $c.Nombre -Dados ([int[]]$c.Dados) -Root $root 2>&1 | Out-Null
+        & (Join-Path $Root 'tools\lanzar_campana.ps1') -Campana $c.Nombre -Dados ([int[]]$c.Dados) -Root $arbol 2>&1 | Out-Null
         Start-Sleep -Seconds 60
     }
     while ((Get-Process -Name gw_sh -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) { Start-Sleep -Seconds $PollSeg }
