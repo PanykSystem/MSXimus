@@ -31,7 +31,9 @@ param(
     [Parameter(Mandatory=$true)][string] $Json,
     [string] $Root    = 'C:\Users\alber\proyectosAI\msx\MSX_up_v3',
     [string] $Scratch = "$env:LOCALAPPDATA\Temp\claude\campanas",
-    [int]    $PollSeg = 120
+    [int]    $PollSeg = 120,
+    # 17/09 noche: no parar al primer GATE OK (para dejar candidatos de varias campanas)
+    [switch] $SinParar
 )
 $ErrorActionPreference = 'Stop'
 $log = Join-Path $Scratch "encadenadas_$Etiqueta.txt"
@@ -81,8 +83,8 @@ foreach ($c in $Campanas) {
     Nota ("gate {0}:`r`n{1}" -f $c.Nombre, $gate)
     $ok = ($gate -split "`r?`n") | Where-Object { $_ -match 'GATE OK' }
     if ($ok) {
-        Nota ("*** DADO BUENO en {0}: {1}. PARO. Comprobar margen >= 0,4 ns con gowin_timing." -f $c.Nombre, ($ok -join ' | '))
-        break
+        Nota ("*** DADO BUENO en {0}: {1}. Comprobar margen >= 0,4 ns con gowin_timing." -f $c.Nombre, ($ok -join ' | '))
+        if (-not $SinParar) { Nota "PARO."; break }
     }
 }
 Nota "fin"

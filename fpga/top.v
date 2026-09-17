@@ -640,7 +640,14 @@ end
     wire vddr_ready_por;                       // ready del backend DDR3 (1 sin DDR3)
     reg  [1:0] vddr_rdy_s = 2'b00;             // 2 FF a clk_27m (viene del dominio x1)
     always @(posedge clk_27m) vddr_rdy_s <= {vddr_rdy_s[0], vddr_ready_por};
-    reg  [6:0] vddr_wait_steps = 7'd0;         // pasos de rst_step esperando (127 = tope)
+    // V3.7b: tope de ~10 s (255 pasos de ~39 ms): el motor de reintentos de la
+    // DDR3 ya escalona las ventanas y un dado lento (4139: >10 s) calibra sin
+    // que el MSX haya arrancado a ciegas y perdido el logo. Sin video no hay
+    // nada que hacer antes, asi que esperar no cuesta.
+    reg  [7:0] vddr_wait_steps = 8'd0;         // pasos de rst_step esperando (255 = tope)
+    // V3.7b: diagnostico del arranque de la DDR3 (puertos 2Ah-2Ch, ver ver_req_r)
+    wire [6:0] vddr_att;                       // intentos de calibracion fallidos
+    wire [7:0] vddr_calib10, vddr_boot100;     // duracion del intento bueno (10 ms) / arranque (100 ms)
 
     //startup logic
     reg reset1_n_ff;
@@ -676,7 +683,7 @@ end
             reset1_n_ff <= 0;
             reset2_n_ff <= 0;
             reset3_n_ff <= 0;
-            vddr_wait_steps <= 7'd0;
+            vddr_wait_steps <= 8'd0;
         end
         else begin
             case ( rst_seq )
@@ -692,14 +699,14 @@ end
                     end
                 2'b10:
                     // V3.6g: reset3_n (streamer del pack + Z80) solo cuando la
-                    // DDR3 de la VRAM esta calibrada, o tras ~5 s a ciegas.
+                    // DDR3 de la VRAM esta calibrada, o tras ~10 s a ciegas (V3.7b).
                     if (rst_step == 1) begin
-                        if (vddr_rdy_s[1] || vddr_wait_steps == 7'd127) begin
+                        if (vddr_rdy_s[1] || vddr_wait_steps == 8'd255) begin
                             reset3_n_ff <= 1;
                             rst_seq <= 2'b11;
                         end
                         else
-                            vddr_wait_steps <= vddr_wait_steps + 7'd1;
+                            vddr_wait_steps <= vddr_wait_steps + 8'd1;
                     end
             endcase
         end
@@ -1075,11 +1082,28 @@ assign keyboard_addr = ppi_port_c[3:0];
     // clasificaban como gamepad).
     wire udbg_req_r = (bus_iorq_n == 1'b0 && bus_m1_n == 1'b1 && bus_rd_n == 1'b0 && bus_addr[7:0] == 8'h2D);
     wire [7:0] usb_dbg = {usb2_conerr, usb1_conerr, usb2_typ, usb1_typ, any_rep_cnt[1:0]};
+    // V3.7b: puertos 2Ah-2Ch = DIAGNOSTICO DEL ARRANQUE DE LA DDR3 (la VRAM). Desde BASIC:
+    //   ?INP(&H2C) AND 127  -> intentos de calibracion FALLIDOS (0 = a la primera)
+    //   ?INP(&H2C) AND 128  -> 128 = la DDR3 esta calibrada
+    //   ?INP(&H2B)*10       -> ms que tardo el intento que calibro (255 = 2,55 s o mas)
+    //   ?INP(&H2A)/10       -> segundos del arranque a la calibracion (255 = 25 s o mas)
+    // Es la respuesta al negro-desde-el-cargador de los dados 3557/3623/4139/4153.
+    wire ddra_req_r = (bus_iorq_n == 1'b0 && bus_m1_n == 1'b1 && bus_rd_n == 1'b0 && bus_addr[7:0] == 8'h2A);
+    wire ddrb_req_r = (bus_iorq_n == 1'b0 && bus_m1_n == 1'b1 && bus_rd_n == 1'b0 && bus_addr[7:0] == 8'h2B);
+    wire ddrc_req_r = (bus_iorq_n == 1'b0 && bus_m1_n == 1'b1 && bus_rd_n == 1'b0 && bus_addr[7:0] == 8'h2C);
+    reg [23:0] vddr_dbg_s1 = 24'd0, vddr_dbg_s2 = 24'd0;   // 2 FF desde el dominio g50 (cuasi-estaticos)
+    always @ (posedge clk_54m) begin
+        vddr_dbg_s1 <= {vddr_rdy_s[1], vddr_att, vddr_calib10, vddr_boot100};
+        vddr_dbg_s2 <= vddr_dbg_s1;
+    end
     always @ (posedge clk_54m) begin
         cpu_din <=
                 ( ver_req_r == 1 ) ? FPGA_VERSION :
                 ( mdbg_req_r == 1 ) ? mouse_dbg :
                 ( udbg_req_r == 1 ) ? usb_dbg :
+                ( ddrc_req_r == 1 ) ? vddr_dbg_s2[23:16] :
+                ( ddrb_req_r == 1 ) ? vddr_dbg_s2[15:8] :
+                ( ddra_req_r == 1 ) ? vddr_dbg_s2[7:0] :
                 // 🚨 14/09: el reg. 15 TIENE que releerse (psgPB = lo ultimo escrito). Devolviendo FFh,
                 // la interrupcion de la BIOS (gatillos: `AND AFh OR 03h` puerto 1 / `AND DFh OR 4Ch`
                 // puerto 2, lee-modifica-escribe) conmutaba el pin 8 del puerto 2 CADA FRAME y el
@@ -2258,6 +2282,7 @@ assign keyboard_addr = ppi_port_c[3:0];
         .b_dout(vddr_b_dout), .b_done(vddr_b_done),
         .clk_x1_out(vddr_clk_x1), .ready(vddr_ready), .diag(vddr_diag),
         .dbg_ops(vddr_ops),        // _129b: {lecturas, escrituras} servidas
+        .dbg_att(vddr_att), .dbg_calib_10ms(vddr_calib10), .dbg_boot_100ms(vddr_boot100),   // V3.7b
         .recal_req(1'b0),
         .clk_27(clk27_video),      // misma topologia que wave_ddr3/_86
         // _130 FIDELIDAD nand2mario: clk/mdclk del controlador desde el PAD
@@ -2275,6 +2300,7 @@ assign keyboard_addr = ppi_port_c[3:0];
     );
 `else
     assign vddr_ready_por = 1'b1;          // V3.6g: sin DDR3 no hay que esperar a nadie
+    assign vddr_att = 7'd0; assign vddr_calib10 = 8'd0; assign vddr_boot100 = 8'd0;
     // _148 FIX B — CAMINO LEGACY (VRAM en la SDRAM compartida, respaldo _137).
     // memory.v solo sabe escribir 1 BYTE por operacion en wv2/wv3 (SdrDat =
     // {wdata,wdata} con la DQM sacada de addr[0]) y NO se toca. El bridge se
