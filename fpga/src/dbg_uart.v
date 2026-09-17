@@ -81,12 +81,19 @@ module dbg_uart #(
     endfunction
 
 generate if (MINIMO) begin : g_minimo
-    // un latido: tx cambia cada PERIOD_MS (el dado entra en la comparacion)
+    // un latido: tx cambia cada PERIOD_MS (el dado entra en la comparacion).
+    // 17/09: la comparacion tiene que ser >= como en la completa, NO ==. Con
+    // == la estructura del comparador es la misma para cualquier constante
+    // (solo cambia el init de las LUT) y el placer devuelve LA MISMA
+    // colocacion con dados distintos: los dados 3761 y 3847 rutaron identicos
+    // (457 redes sin rutar, informes iguales), y 3797, 3803 y 3877 tambien
+    // (434). Quince dados de la dieta que en realidad eran unos ocho. Con >=
+    // la sintesis poda segun los bits de la constante y el dado si perturba.
     reg [31:0] lat_cnt = 32'd0;
     reg        lat = 1'b1;
     always @(posedge clk) begin
         if (!rst_n) begin lat_cnt <= 32'd0; lat <= 1'b1; end
-        else if (lat_cnt == TICKS - 1) begin lat_cnt <= 32'd0; lat <= ~lat; end
+        else if (lat_cnt >= TICKS) begin lat_cnt <= 32'd0; lat <= ~lat; end
         else lat_cnt <= lat_cnt + 32'd1;
     end
     always @(*) tx = lat;

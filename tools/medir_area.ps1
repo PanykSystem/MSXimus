@@ -21,6 +21,10 @@
 param(
     [Parameter(Mandatory=$true)][string] $Nombre,
     [string[]] $Define = @(),
+    # dado (PERIOD_MS del dbg_uart) como en lanzar_campana; 0 = el del repo (250).
+    # Sirve para comprobar que el dado PERTURBA el netlist: dos sintesis con
+    # dados distintos tienen que dar LUTs distintas en u_dbguart.
+    [int] $Dado = 0,
     [string] $Root    = 'C:\Users\alber\proyectosAI\msx\MSX_up_v3',
     [string] $Scratch = "$env:LOCALAPPDATA\Temp\claude\area",
     [string] $Gowin   = 'C:\Gowin\Gowin_V1.9.12.03_x64\IDE\bin\gw_sh.exe'
@@ -33,6 +37,12 @@ if (Test-Path $dst) { Remove-Item $dst -Recurse -Force }
 New-Item -ItemType Directory -Path "$dst\fpga" -Force | Out-Null
 robocopy "$Root\fpga" "$dst\fpga" /E /NFL /NDL /NJH /NJS /NP /XD impl opl4_20k_est zynq /XF build_*.log | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy fallo (codigo $LASTEXITCODE)" }
+
+if ($Dado -gt 0) {
+    $pu = "$dst\fpga\src\dbg_uart.v"
+    Set-Content -Path $pu -NoNewline -Value ((Get-Content $pu -Raw).Replace('PERIOD_MS = 250', "PERIOD_MS = $Dado"))
+    if ((Get-Content $pu -Raw) -notmatch "PERIOD_MS = $Dado") { throw "no se aplico el dado" }
+}
 
 # misma config que la campana: V9968 + VRAM en DDR3
 $pt = "$dst\fpga\top.v"
