@@ -15,6 +15,11 @@
 #   .\tools\encadenar_campanas.ps1 -Etiqueta noche17 -Json campanas.json
 #   campanas.json = [ {"Nombre":"v36n","Dados":[3847,3851,3853,3863,3877],"Variante":"po1"},
 #                     {"Nombre":"v36o","Dados":[3881,3889,3907,3911,3917],"Variante":"po2"}, ... ]
+#   Una entrada con "Root":"<carpeta>" usa ese arbol en vez del repo (campana
+#   de control sobre otro commit; la carpeta debe contener fpga\).
+#   Una entrada con "SoloGate":true no se lanza: se espera a que acaben los
+#   gw_sh que ya corren y se le pasa el gate (para retomar una campana lanzada
+#   a mano).
 #
 # Variantes: 'po1' = el arbol del repo tal cual (place_option 1);
 #            'po2' = copia del arbol con `set_option -place_option 2`.
@@ -32,6 +37,9 @@ $ErrorActionPreference = 'Stop'
 $log = Join-Path $Scratch "encadenadas_$Etiqueta.txt"
 $Campanas = Get-Content $Json -Raw | ConvertFrom-Json
 function Nota([string]$s) { $l = ("{0}  {1}" -f (Get-Date -Format 'HH:mm:ss'), $s); Add-Content -Path $log -Value $l; Write-Output $l }
+# 17/09: el runner de noche17 murio en silencio al pasar de v36n a v36o (la
+# carpeta v36o ni se creo); que al menos quede la excepcion en el log.
+trap { Nota ("EXCEPCION: {0}`r`n{1}" -f $_, $_.ScriptStackTrace); break }
 
 # variante place_option 2: copia del arbol con el build.tcl tocado
 $rootPo2 = Join-Path $Scratch "root_po2_$Etiqueta"
@@ -53,10 +61,18 @@ foreach ($c in $Campanas) {
         Nota "hay gw_sh corriendo de antes: espero a que acaben"
         while ((Get-Process -Name gw_sh -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) { Start-Sleep -Seconds $PollSeg }
     }
-    $root = if ($c.Variante -eq 'po2') { $rootPo2 } else { $Root }
-    Nota ("campana {0} ({1}) dados {2}" -f $c.Nombre, $c.Variante, ($c.Dados -join ','))
-    & (Join-Path $Root 'tools\lanzar_campana.ps1') -Campana $c.Nombre -Dados ([int[]]$c.Dados) -Root $root 2>&1 | Out-Null
-    Start-Sleep -Seconds 60
+    # "Root" en la entrada = arbol propio (p.ej. una copia de otro commit para
+    # una campana de control); si no, po1 = repo, po2 = la copia con place_option 2
+    $root = if ($c.Root) { $c.Root } elseif ($c.Variante -eq 'po2') { $rootPo2 } else { $Root }
+    if ($c.SoloGate) {
+        # campana lanzada a mano (o por un runner anterior que murio): no se
+        # relanza, solo se espera a que acabe y se pasa el gate
+        Nota ("campana {0} ya lanzada: solo espero y paso el gate" -f $c.Nombre)
+    } else {
+        Nota ("campana {0} ({1}) dados {2}" -f $c.Nombre, $c.Variante, ($c.Dados -join ','))
+        & (Join-Path $Root 'tools\lanzar_campana.ps1') -Campana $c.Nombre -Dados ([int[]]$c.Dados) -Root $root 2>&1 | Out-Null
+        Start-Sleep -Seconds 60
+    }
     while ((Get-Process -Name gw_sh -ErrorAction SilentlyContinue | Measure-Object).Count -gt 0) { Start-Sleep -Seconds $PollSeg }
     $gate = & (Join-Path $Root 'tools\gate_check.ps1') -Campana (Join-Path $Scratch $c.Nombre) 2>&1 | Out-String
     Nota ("gate {0}:`r`n{1}" -f $c.Nombre, $gate)
