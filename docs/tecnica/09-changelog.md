@@ -142,6 +142,7 @@ En placa, con el 4139: el arranque desde el cargador falla 3 de 5 veces (negro m
 - **La espera del arranque pasa de 5 a 10 s**: sin vídeo no hay nada que hacer antes, y así un dado lento calibra sin que el MSX haya arrancado a ciegas y perdido el logo.
 - **Puertos 2Ah-2Ch**: intentos fallidos, duración del intento bueno y tiempo total, para que "falla 3 de 5" pase a ser un número por dado (y para saber si un intento normal tarda 30 ms o 300 ms).
 - Banco de pruebas del backend con la IP fallando 18 intentos seguidos: ventanas, resets del PLL y contadores como se espera; la suite T1-T9 sigue en verde.
+- Campañas de la noche (b5c15ee, cuatro de cinco dados, 23:02-01:31): v37e 4 de 5 pasan el gate (4159 0,081 ns, 4177 0,020, 4201 0,039, **4211 1,010**), v37f 1 de 5 (4231 0,068; 4229 con seis caminos de la propia IP DDR3 sin cerrar), v37g 1 de 5 (**4273 0,465**), v37h 2 de 5 (4289 0,328, **4297 1,616**). Veinte dados, nueve por el gate, tres con margen de entrega: 4297, 4211 y 4273, en `files/20260918/` con un LEEME de cómo medirlos desde el cargador. Los tres llevan el motor nuevo y los puertos; cuál calibra es la lotería del dado.
 
 ## v3.7 (17 de septiembre): mezclador de audio por fuente
 
