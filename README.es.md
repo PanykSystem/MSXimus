@@ -66,7 +66,7 @@ Todo va a la **flash SPI** de la placa, en tres direcciones distintas:
 
 | # | Fichero | Dirección | ¿Obligatorio? |
 |---|---|---|---|
-| 1 | `MSXimus_v3.1.fs` | **`0x000000`** | Sí — es el core |
+| 1 | `MSXimus_v3.7.fs` | **`0x000000`** | Sí — es el core |
 | 2 | Pack de BIOS (`pack_bios_msximus*.bin`) | **`0x400000`** | Sí — sin él no arranca el MSX |
 | 3 | `yrw801.rom` | **`0x500000`** | No — solo para MoonSound/OPL4 |
 
@@ -150,7 +150,7 @@ Dos imágenes, y **conviven** — la de fábrica de Sipeed se queda donde está:
 | Fichero | Dirección |
 |---|---|
 | `bl616_fpga_partner_60kConsole.bin` (de Sipeed, va en la release) | **`0x0`** |
-| `bl616_v3.1.bin` | **`0x40000`** |
+| `bl616_v3.7.bin` | **`0x40000`** |
 
 1. **Mantén pulsado el botón BOOT mientras enchufas el USB.** Eso mete el chip en modo ISP.
 2. Aparece un **puerto COM nuevo** — ese es el BL616. (Listar los puertos antes y después de enchufar es la forma fácil de saber cuál.)
@@ -188,14 +188,14 @@ Y así queda del lado del módulo:
 
 ### Grabar el C6
 
-El firmware del módulo y su inventario técnico completo viven en su propio repositorio, [**ESP32-for-FPGA**](https://github.com/Papipapito/ESP32-for-FPGA) — el mismo binario sirve al MSXimus y al MSXnano, así que ya no se guarda una copia aquí. Coge el `firmware_esp32c6_v3.2_merged.bin` de la release y grábalo en el C6 por **su propio USB-C**. **No** hace falta el IDE de Arduino, ni compilar nada: la release trae un único binario ya fusionado.
+El firmware del módulo y su inventario técnico completo viven en su propio repositorio, [**ESP32-for-FPGA**](https://github.com/Papipapito/ESP32-for-FPGA) — el mismo binario sirve al MSXimus y al MSXnano, así que ya no se guarda una copia aquí. Coge el `firmware_esp32c6_v3.7_merged.bin` de la release y grábalo en el C6 por **su propio USB-C**. **No** hace falta el IDE de Arduino, ni compilar nada: la release trae un único binario ya fusionado.
 
 **Lo fácil — desde el navegador, sin instalar nada.** Abre [**esptool-js**](https://espressif.github.io/esptool-js/), el grabador web del propio Espressif, en Chrome o Edge. Conectas, eliges el fichero, pones la dirección `0x0` y le das a Program. Sin drivers, sin Python, sin IDE.
 
 **Por línea de órdenes**, si ya lo tienes:
 
 ```
-esptool --chip esp32c6 --port COMx write_flash 0x0 firmware_esp32c6_v3.2_merged.bin
+esptool --chip esp32c6 --port COMx write_flash 0x0 firmware_esp32c6_v3.7_merged.bin
 ```
 
 > No hay una vía de arrastrar y soltar como el `.uf2` de la Raspberry Pi Pico: el ESP32 no lleva bootloader de almacenamiento masivo en ROM, así que copiar un fichero a una unidad no es posible en **ningún** ESP32. El grabador web de arriba es lo más cerca que se puede estar: una página, dos clics y nada instalado.
@@ -226,6 +226,19 @@ fpga/            top.v, build.tcl
   constraints/   Pinout y constraints de la Console 60K
 tools/           Testbenches y utilidades de validación
 ```
+
+## Lo nuevo de la v3.7
+
+Cambia el core y cambia el pack: **hay que grabar los dos** (el pack nuevo es obligatorio con este core).
+
+- **Mezclador de audio por chip** en Ajustes: PSG, SCC, OPLL, MSX-Audio, OPL4 FM y OPL4 wave con su propio nivel (0-8), nota de prueba en cada chip y los niveles guardados en la flash. La ganancia maestra de siempre es la primera fila.
+- **Tarjeta SD por DMA**: el core copia los sectores a la RAM sin pasar por el Z80 (~640 KB/s, contra ~110 de antes) en el menú, en el análisis de las ROMs y en Nextor.
+- **Mandos HID por los dos USB-A** (puerto 1 del MSX). Solo mandos HID genéricos; los XInput (Xbox y compatibles) no.
+- **V9968 generación C**: arregla el marcador de *Xevious Fardraut Saga*. El software de la generación B (DEVCON con 0x9F, V9968DM, TECH DEMO 0.7.0) necesita `OUT (9Ch),0` antes de tocar R#20/R#21.
+- **El arranque espera a la DDR3 de la VRAM** (hasta 10 s) con reintentos escalonados de la calibración; mientras no ha calibrado, el LED de la SD (U12) parpadea solo. Los puertos 2Ah-2Ch lo cuentan desde BASIC: `PRINT INP(&H2C) AND 127, INP(&H2B)*10, INP(&H2A)/10`.
+- Megaram de 4 MB con mappers NEO-8/16, Game Master 2 emulado en el slot 1 (tecla `G`), SRAM guardada en la tarjeta, Nextor 3 beta, ratón USB con cable.
+- **Documentación completa** en [`docs/INDICE.md`](docs/INDICE.md): manual de usuario (10 capítulos) y referencia técnica (9).
+- BL616: el firmware del panel F12 va con el **host USB apagado** (un cargador USB-C en el OTG no arrancaba la placa con la pila activa); los mandos van por los USB-A del core.
 
 ## Lo nuevo de la v3.2
 

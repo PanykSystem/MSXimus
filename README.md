@@ -3,7 +3,7 @@
 <h1 align="center">MSXimus</h1>
 <p align="center"><b>A complete MSX2+ on a Tang Console 60K — now with the V9968 VDP</b></p>
 <p align="center">
-  <img alt="version" src="https://img.shields.io/badge/version-v3.1-blue">
+  <img alt="version" src="https://img.shields.io/badge/version-v3.7-blue">
   <img alt="fpga" src="https://img.shields.io/badge/FPGA-Gowin%20GW5AT--60-green">
   <img alt="license" src="https://img.shields.io/badge/license-GPLv3-orange">
 </p>
@@ -66,7 +66,7 @@ Everything goes into the board's **SPI flash**, at three different addresses:
 
 | # | File | Address | Required? |
 |---|---|---|---|
-| 1 | `MSXimus_v3.1.fs` | **`0x000000`** | Yes — this is the core |
+| 1 | `MSXimus_v3.7.fs` | **`0x000000`** | Yes — this is the core |
 | 2 | BIOS pack (`pack_bios_msximus*.bin`) | **`0x400000`** | Yes — the MSX won't boot without it |
 | 3 | `yrw801.rom` | **`0x500000`** | No — only for MoonSound/OPL4 |
 
@@ -150,7 +150,7 @@ Two images, and they **coexist** — the Sipeed factory one stays where it is:
 | File | Address |
 |---|---|
 | `bl616_fpga_partner_60kConsole.bin` (Sipeed's, shipped in the release) | **`0x0`** |
-| `bl616_v3.1.bin` | **`0x40000`** |
+| `bl616_v3.7.bin` | **`0x40000`** |
 
 1. **Hold the BOOT button down while you plug in the USB.** That puts the chip in ISP mode.
 2. A **new COM port** appears — that one is the BL616. (Listing the ports before and after plugging it in is the easy way to tell which.)
@@ -188,14 +188,14 @@ And this is the module side:
 
 ### Flashing the C6
 
-The module's firmware and its full technical inventory live in their own repository, [**ESP32-for-FPGA**](https://github.com/Papipapito/ESP32-for-FPGA) — the same binary serves the MSXimus and the MSXnano, so no copy is kept here any more. Take `firmware_esp32c6_v3.2_merged.bin` from the release and write it to the C6 through **its own USB-C**. You do **not** need the Arduino IDE, and you do not need to compile anything — the release ships a single merged binary.
+The module's firmware and its full technical inventory live in their own repository, [**ESP32-for-FPGA**](https://github.com/Papipapito/ESP32-for-FPGA) — the same binary serves the MSXimus and the MSXnano, so no copy is kept here any more. Take `firmware_esp32c6_v3.7_merged.bin` from the release and write it to the C6 through **its own USB-C**. You do **not** need the Arduino IDE, and you do not need to compile anything — the release ships a single merged binary.
 
 **The easy way — from the browser, nothing installed.** Open [**esptool-js**](https://espressif.github.io/esptool-js/), Espressif's own web flasher, in Chrome or Edge. Connect, pick the file, set the offset to `0x0`, and click Program. No drivers, no Python, no IDE.
 
 **The command-line way**, if you already have it:
 
 ```
-esptool --chip esp32c6 --port COMx write_flash 0x0 firmware_esp32c6_v3.2_merged.bin
+esptool --chip esp32c6 --port COMx write_flash 0x0 firmware_esp32c6_v3.7_merged.bin
 ```
 
 > There is no drag-and-drop route like the Raspberry Pi Pico's `.uf2`: the ESP32 has no mass-storage bootloader in ROM, so a file you copy onto a drive is not an option on any ESP32. The web flasher above is as close as it gets — one page, two clicks, nothing to install.
@@ -226,6 +226,19 @@ fpga/            top.v, build.tcl
   constraints/   Console 60K pinout and constraints
 tools/           Testbenches and validation utilities
 ```
+
+## What's new in v3.7
+
+The core changes, and so does the pack: **flash both** (the new pack is required with this core).
+
+- **Per-chip audio mixer** in Settings: PSG, SCC, OPLL, MSX-Audio, OPL4 FM and OPL4 wave each get their own level (0-8), with a test note per chip; levels are stored in flash. The master gain is the first row.
+- **SD card by DMA**: the core copies sectors into RAM without the Z80 in the way (~640 KB/s, up from ~110) in the menu, the ROM analysis and Nextor.
+- **HID gamepads on both USB-A ports** (MSX joystick port 1). Generic HID pads only; XInput (Xbox and compatibles) is not supported.
+- **V9968 generation C**: fixes the *Xevious Fardraut Saga* score. Generation-B software (DEVCON with 0x9F, V9968DM, TECH DEMO 0.7.0) needs `OUT (9Ch),0` before touching R#20/R#21.
+- **Boot waits for the VRAM's DDR3** (up to 10 s) with escalating calibration retries; while it has not calibrated, the SD LED (U12) blinks on its own. Ports 2Ah-2Ch report it from BASIC: `PRINT INP(&H2C) AND 127, INP(&H2B)*10, INP(&H2A)/10`.
+- 4 MB megaram with NEO-8/16 mappers, Konami Game Master 2 emulated in slot 1 (key `G`), SRAM saved to the card, Nextor 3 beta, wired USB mouse.
+- **Full documentation** in [`docs/INDICE.md`](docs/INDICE.md): a 10-chapter user manual and a 9-chapter technical reference (Spanish).
+- BL616: the F12-panel firmware ships with its **USB host off** (a USB-C charger on the OTG port would not boot the board with the host stack active); gamepads go through the core's USB-A ports.
 
 ## What's new in v3.2
 
