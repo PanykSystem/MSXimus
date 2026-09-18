@@ -8,9 +8,9 @@ El MSXimus corre en la **Sipeed Tang Console 60K**, una placa con un módulo SOM
 
 | Recurso | Para qué lo usa el core |
 |---|---|
-| SDRAM externa de 16 bits | Toda la memoria del MSX: BIOS y ROMs del pack, mapper de 2 MB, megaram de 4 MB, fuente kanji, driver de disco. Mapa en el capítulo 03 |
-| DDR3 del SOM | La VRAM del V9968 y la tabla de ondas de 2 MB del OPL4. Dos clientes independientes, cada uno con su propio controlador |
-| Flash QSPI de 8 MB | El bitstream, el pack de BIOS de 512 KB, seis bytes de configuración y la ROM de ondas YRW801 |
+| SDRAM externa de 16 bits | Toda la memoria del MSX: BIOS y ROMs del pack, mapper de 2 MB, megaram de 4 MB, fuente kanji, driver de disco. Mapa en el capítulo 03. Y, por encima de los 8 MB que direcciona la CPU (filas 4096 y siguientes del W9825), los 4 MB de la familia de ondas: la YRW801 del OPL4 (puerto `wv` de `memory_ctrl`) y los 256 KB de muestras del ADPCM del Y8950 (puerto `wv2`, filas 5120+) |
+| DDR3 del SOM | La VRAM del V9968, con su propio controlador. Es el único cliente de la DDR3: las ondas del OPL4 se mudaron a la SDRAM en la _104 (la DDR3 de esta placa es marginal y la VRAM, que se reescribe sola, la tolera mejor que una tabla estática) |
+| Flash QSPI de 8 MB | El bitstream, el pack de BIOS de 512 KB, once bytes de configuración (los seis de siempre más los niveles del mezclador y su suma, desde la v3.7) y la ROM de ondas YRW801 |
 | Tarjeta SD | Discos y ROMs del usuario, con su propio controlador en el core (capítulo 06) |
 | BL616 | Flasheo por JTAG, y una UART con el core para el panel de estado F12 sobre el HDMI |
 | ESP32-C6 externo | WiFi UNAPI y pantalla de estado, por UART a unos 860 kbps |
@@ -54,7 +54,7 @@ flowchart LR
         SCC["SCC ×2"]
         OPLL["OPLL"]
         Y8950["Y8950 + ADPCM"]
-        OPL4["OPL4: FM + PCM\n(ondas en DDR3)"]
+        OPL4["OPL4: FM + PCM\n(ondas en SDRAM)"]
         MIX["Mezclador con\nganancia #44"]
     end
     SLOT --> PSG & SCC & OPLL & Y8950 & OPL4 --> MIX --> HDMI
@@ -88,7 +88,7 @@ Un solo PLL principal genera el árbol del MSX a partir del oscilador de 50 MHz 
 | `clk_wave375` | 37,500 MHz | Motor PCM del OPL4 |
 | `clk_86` | 85,909 MHz | El V9968 y su shim de VRAM. Es 27 × 35/11, cero ppm respecto a 24 veces la subportadora de color |
 | `clk_hdmi` / `clk_hdmi5` | 74,25 / 371,25 MHz | Píxel y TMDS ×5 del 720p, de una cascada 50 → 27 → 74,25 calcada de la plantilla de nand2mario para esta placa |
-| DDR3 | 297 MHz | Dos controladores independientes, uno para la VRAM y otro para las ondas del OPL4, con el reloj de calibración desde el pad de 50 MHz |
+| DDR3 | 297 MHz | Un solo controlador, el de la VRAM del V9968 (las ondas del OPL4 van por la SDRAM), con el reloj de calibración desde el pad de 50 MHz |
 
 El Z80 no va a 3,58 MHz: va a 54 MHz con habilitaciones de reloj que dibujan los T-estados. El divisor normal es 108 ÷ 30 = 3,6 MHz; el turbo es 108 ÷ 20 = 5,4 MHz con un pulso tragado cada 176, que da 5,369318 MHz exactos, la receta del turbo de Panasonic. El cambio entre los dos se hace sin glitch, solo cuando el bus está en reposo y la SDRAM libre.
 
@@ -144,8 +144,8 @@ Siete generadores entran en un mezclador con saturación en `clk_54m`:
 | SCC / SCC+ | En la megaram, 9800h y B800h | `scc_wave2` en Verilog puro; el VHDL original lo barría la síntesis de la GW5A |
 | Segundo SCC | Slot 1 | El mismo módulo, en el slot que no ocupa la megaram |
 | OPLL YM2413 | 7C-7D | `jt2413` de JOTEGO |
-| Y8950 MSX-Audio | C0-C1 | `jtopl2` más un decodificador ADPCM-B con 32 KB de muestras en BSRAM y su IRQ al Z80 |
-| OPL4 MoonSound | C4-C7 y 7E-7F | FM con `opl3_fpga` y motor PCM `YMF278B` de 24 slots con las ondas en la DDR3, cargadas de la flash en segundo plano tras el arranque |
+| Y8950 MSX-Audio | C0-C1 | `jtopl2` más un decodificador ADPCM-B con los 256 KB de muestras completos del Y8950 en la SDRAM (`adpcm_sdram`, puerto `wv2` de `memory_ctrl`, filas 5120+; en la línea de respaldo con la VRAM en SDRAM caen a 32 KB en BSRAM) y su IRQ al Z80 |
+| OPL4 MoonSound | C4-C7 y 7E-7F | FM con `opl3_fpga` y motor PCM `YMF278B` de 24 slots con las ondas en la SDRAM (`wave_sdram`, puerto `wv` de `memory_ctrl`), cargadas de la flash en segundo plano tras el arranque |
 
 El grupo clásico pasa por una ganancia maestra ajustable de 0 a 7 por el puerto #44, guardada en la flash; el OPL4 entra después de esa ganancia, a nivel nativo, porque la ganancia existe justamente para subir los chips flojos a la altura del MoonSound. El OPLL entra atenuado a tres cuartos para igualar el balance medido en openMSX entre su portadora y la del Y8950. Hay salida mono y estéreo, según Ajustes.
 
@@ -160,17 +160,16 @@ El grupo clásico pasa por una ganancia maestra ajustable de 0 a 7 por el puerto
 - **Tira de ocho LEDs WS2812**: diagnóstico. El LED de red parpadea con el tráfico de la UART del ESP.
 - **Ventilador** por temperatura (`fan_ctrl` + oscilador de anillo `ro_osc` como termómetro relativo).
 - **Telemetría serie** (`dbg_uart` por E22 y la UART del USB-C): contadores del shim del V9968, la DDR3, el audio y el ventilador; su periodo (`PERIOD_MS`) es el dado que siembra el placement de cada campaña.
-- Los cuatro anteriores más el decodificador de teclado único forman la *dieta* de la v3.6h (`DIETA_V36H` en `top.v`, apagada): se probó y rutaba peor, ver el [capítulo 07](07-sintesis-campanas.md).
-- **Ventilador** controlado por temperatura, con un oscilador en anillo como sensor.
+- La telemetría, la tira de LEDs, el ventilador por temperatura y el segundo PSG, más un decodificador de teclado único, forman la *dieta* de la v3.6h (`DIETA_V36H` en `top.v`, apagada): se probó y rutaba peor, ver el [capítulo 07](07-sintesis-campanas.md).
 - **UART de depuración** a 54 MHz por un PMOD, apagada en las entregas.
 
 ## 9. Qué pasa al encender
 
 1. El PLL principal engancha. Un secuenciador de reset suelta tres etapas separadas 39 ms.
-2. El **streamer de flash** copia el pack de BIOS, 512 KB más seis bytes, desde 0x400000 de la flash a la SDRAM, byte a byte por el camino de streaming. Al final lee los seis bytes de configuración: los dos registros de Ajustes, el byte de turbo al arrancar y el de ganancia. Con el botón S2 pulsado se cargan los valores de fábrica.
-3. Mientras tanto la DDR3 calibra y, en cuanto el pack está en su sitio, el **cargador de ondas** empieza a copiar los 2 MB de la YRW801 desde 0x500000 a la DDR3, en segundo plano.
+2. El **streamer de flash** copia el pack de BIOS, 512 KB más once bytes, desde 0x400000 de la flash a la SDRAM, byte a byte por el camino de streaming. Al final lee los once bytes de configuración: los dos registros de Ajustes, el byte de turbo al arrancar, el de ganancia y, desde la v3.7, los niveles del mezclador con su suma. Con el botón S2 pulsado se cargan los valores de fábrica.
+3. Mientras tanto la DDR3 calibra y, en cuanto el pack está en su sitio, el **cargador de ondas** empieza a copiar los 2 MB de la YRW801 desde 0x500000 a la región de ondas de la SDRAM, en segundo plano.
 4. El core espera unos tres segundos a que el **ESP32** haya arrancado, para que el driver de red lo encuentre a la primera.
-5. Cuando todo eso está, el Z80 sale de reset y arranca la BIOS del pack. El menú de la BIOS vive como cartucho en el slot 3-1 y toma el control en el escaneo de slots; lo que hace a partir de ahí lo cuenta el capítulo 04 del manual.
+5. Cuando todo eso está, y la DDR3 de la VRAM ha calibrado (desde la v3.6g el paso a `reset3_n` espera al `ready` del backend, con un tope de unos 10 s desde la v3.7b para arrancar a ciegas si nunca calibra; mientras tanto el LED de la SD parpadea solo), el Z80 sale de reset y arranca la BIOS del pack. El menú de la BIOS vive como cartucho en el slot 3-1 y toma el control en el escaneo de slots; lo que hace a partir de ahí lo cuenta el capítulo 04 del manual.
 
 Un reset del MSX no repite el streaming: la SDRAM conserva su contenido, y por eso conserva también la megaram con la partida guardada, que es lo que permite el guardado de SRAM al siguiente arranque. Un apagado lo pierde todo.
 

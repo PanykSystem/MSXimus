@@ -134,7 +134,7 @@ Los tres de la DDR3 son la respuesta al arranque en negro desde un cargador (cap
 
 ### 34h-37h: DDR3 y cargador de ondas
 
-Cuatro puertos de solo lectura que dejó el bring-up de la DDR3 para el OPL4: 34h diagnóstico de la DDR3, 35h diagnóstico del motor, 36h estado del cargador (bit 2 = copiando la YRW801), 37h un byte de la DDR3 leído por anticipado.
+Cuatro puertos de solo lectura que dejó el bring-up de la DDR3 para el OPL4, cuando las ondas vivían en ella (desde la _104 van por la SDRAM del dock, `wave_sdram`, y los puertos conservan el nombre y la interfaz): 34h diagnóstico de la DDR3, 35h diagnóstico del motor, 36h estado del cargador (bit 2 = copiando la YRW801), 37h un byte de la DDR3 leído por anticipado.
 
 ### 7Ch-7Dh: OPLL
 
@@ -142,7 +142,7 @@ El YM2413 de MSX-MUSIC, solo escritura: 7Ch registro, 7Dh dato.
 
 ### 7Eh-7Fh: OPL4, ondas
 
-La parte PCM del MoonSound: 7Eh registro y 7Fh dato del motor de 24 slots. La ROM de ondas es la YRW801 de 2 MB, en la DDR3.
+La parte PCM del MoonSound: 7Eh registro y 7Fh dato del motor de 24 slots. La ROM de ondas es la YRW801 de 2 MB, copiada de la flash (0x500000) a la región de ondas de la SDRAM del dock al arrancar (capítulo 03).
 
 ### 88h-8Bh y 98h-9Bh: el V9968
 

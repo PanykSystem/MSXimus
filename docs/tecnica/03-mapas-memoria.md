@@ -30,6 +30,8 @@ Detalles que importan:
 
 ## 2. La SDRAM física: 8 MB
 
+El controlador direcciona 8 MB con 23 bits para la CPU (filas 0-2047 del W9825); por encima, en las filas 4096 y siguientes, fuera del alcance de cualquier mapeo de la CPU, viven los 4 MB de la familia de ondas del OPL4 (la YRW801 de 2 MB copiada de la flash al arrancar, por el puerto `wv` de `memory_ctrl`) y, en las filas 5120+, los 256 KB de muestras del ADPCM del Y8950 (`adpcm_sdram`, puerto `wv2`). Roban turnos vacíos de la CPU y no compiten con ella.
+
 El controlador direcciona 8 MB con 23 bits. Los cuatro bancos de 2 MB se reparten así:
 
 | Rango | Banco | Contenido | Bits altos de la dirección |
@@ -89,18 +91,15 @@ El mecanismo de guardado depende de que la SDRAM sobreviva al reset del MSX, que
 | 500000-6FFFFF | 2 MB | ROM de ondas YRW801 del OPL4 |
 | 700000-7FFFFF | 1 MB | Libre |
 
-El pack se flashea en 400000 y el core lo copia a la SDRAM en cada encendido. El mismo streaming que copia los 512 KB lee los seis bytes siguientes y los carga en los registros 41h, 42h, 45h y 44h. El menú, al hacer Save & Restart, reescribe solo esos seis bytes. Desde el 9 de septiembre de 2026 el pack del MSXimus mide 512 KB justos, sin esa cola: así grabar un pack nuevo no pisa los ajustes guardados (se perdió dos veces en un día el "Slot 1 = Game Master 2" por eso). El pack del MSXnano sí la lleva.
+El pack se flashea en 400000 y el core lo copia a la SDRAM en cada encendido. El mismo streaming que copia los 512 KB lee los once bytes siguientes: los seis primeros van a los registros 41h, 42h, 45h y 44h y los cuatro de niveles del mezclador, con su byte de suma, a los atenuadores del 44h (desde la v3.7). El menú, al hacer Save & Restart, reescribe solo esos once bytes. Desde el 9 de septiembre de 2026 el pack del MSXimus mide 512 KB justos, sin esa cola: así grabar un pack nuevo no pisa los ajustes guardados (se perdió dos veces en un día el "Slot 1 = Game Master 2" por eso). El pack del MSXnano sí la lleva.
 
 Si la cola no empieza por 'AB' el core no la carga y se queda con los valores de fábrica: config 1 = F3h (mapper en 3-0 y megaram en 3-3 activos, segundo SCC y scanlines apagados), config 2 = 0Fh (SD activa en el slot 3-2 y menú al arrancar), sin turbo y ganancia 5. Con el botón S2 pulsado en el encendido pasa lo mismo aunque la cola sea válida: es el rescate.
 
-## 5. La DDR3 del SOM: dos clientes
+## 5. La DDR3 del SOM: un solo cliente
 
-| Cliente | Contenido | Cuándo se escribe |
-|---|---|---|
-| Backend de vídeo | Los 256 KB de VRAM del V9968 | Todo el tiempo, por el shim |
-| Cargador de ondas | Los 2 MB de la YRW801 | Una vez, en segundo plano, tras copiar el pack. El bit 2 del puerto 36h dice que sigue copiando |
+La DDR3 tiene un único cliente: el backend de vídeo, con los 256 KB de VRAM del V9968, escritos todo el tiempo por el shim. Las ondas del OPL4 no van aquí desde la _104: el **cargador de ondas** copia los 2 MB de la YRW801 desde la flash a la región de ondas de la SDRAM (apartado 2), una vez, en segundo plano, tras copiar el pack; el bit 2 del puerto 36h dice que sigue copiando.
 
-Cada cliente tiene su propio controlador DDR3, con la receta de nand2mario para esta placa: PLL a 297 MHz con la secuencia de arranque del 60K, órdenes de ráfaga de 128 bits y refresco automático activado. El refresco no es opcional: la tabla de ondas es un dato estático que hay que conservar horas.
+El controlador sigue la receta de nand2mario para esta placa: PLL a 297 MHz, órdenes de ráfaga de 128 bits y refresco automático activado. Si no calibra al encender, el core reintenta con ventanas cada vez más largas (capítulo 05 y el 10 del manual).
 
 ## 6. Qué comparte el camino de streaming
 
