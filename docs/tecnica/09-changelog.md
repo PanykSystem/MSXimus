@@ -134,7 +134,11 @@ Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de 
 
 Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h, cuatro dados: 3613 y 3607 fuera de gate (-0,05 y -1,87 ns en el motor del OPL4), 3617 con una red sin rutar. Sin respaldo. En la semana, once dados para tres útiles: al 98 % de CLS la campaña de tres ya no basta, y la de cuatro tampoco sobra.
 
-## v3.7b (17 de septiembre, noche; en campaña): la calibración de la DDR3 desde el cargador
+## v3.7 publicada (18 de septiembre, tag `v3.7`): dado 4211
+
+Release en GitHub con el core del dado 4211 (`MSXimus_v3.7.fs`, f588b2ef; campaña v37e, 1,010 ns en el clk_86, holds solo la IP DDR3; RTL b5c15ee = v3.7b), los dos packs (Nextor 2.1.4 fb9b6c38 y Nextor 3 10321483), el firmware del C6 (`firmware_esp32c6_v3.7_merged.bin`) y el del BL616 con el host USB apagado (`bl616_v3.7.bin` = eb5d66f, con el partner de Sipeed y el `.ini` de BLDevCube). El 4211 arranca desde un cargador USB-C sin PC. La rama pública pasa a `V3.7` (rama por defecto). El mismo día, la línea 138K publica su v3.7 (dado 4391) en `Papipapito/MSXimus_138`.
+
+## v3.7b (17 de septiembre, noche): la calibración de la DDR3 desde el cargador
 
 En placa, con el 4139: el arranque desde el cargador falla 3 de 5 veces (negro más de 10 s y después el menú sin el logo); el 4153 de respaldo, negro siempre, también desde el PC. En los dos, el LED U12 parpadea solo y más rápido con F11: es el chivato de la v3.6g (cuenta con el reloj de bus), es decir, **la DDR3 de la VRAM no calibra y el MSX corre por debajo**. Igual que el 3557 y el 3623; el 3593 y el 4001 calibran siempre. No es el BL616 (mismo firmware en todos) ni la colocación de la IP (idéntica en nueve dados, buenos y malos, según los informes): es la probabilidad de éxito de cada intento de calibración, que depende del dado y de la alimentación, la "lotería del ojo" de la saga de julio. Un dado que la tenía en ~1/7 (la _128Z) calibraba en 2 s; el 4153 la tiene en ~0.
 
