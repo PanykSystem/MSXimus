@@ -65,7 +65,7 @@ La colección más grande, porque ahí se cazaron los errores de integración de
 
 ### Audio: `tools/opl3_sim/` y `tools/opl4wave_sim/`
 
-El OPL3 se simula con Verilator desde C++: `run_vgm.sh` reproduce un VGM contra el core y saca un WAV, y `tb_opl3_storm` bombardea el interfaz de host. `opl4wave_sim` guarda los volcados con que se depuró el motor PCM y su caché. `run_slotrd.sh` (`tb_slotrd.v`) comprueba que los registros de slot del wavetable se releen bien **a la primera** por 7Fh, a través de `opl4_pcm.v` y con un Z80 que respeta /WAIT: los diez grupos (08h-F7h) por 24 slots con la fase del acceso barrida por semilla, en reposo y con seis slots sonando; lleva sondas dentro del motor y mide cuánto dura /WAIT en cada IN 7Fh.
+El OPL3 se simula con Verilator desde C++: `run_vgm.sh` reproduce un VGM contra el core y saca un WAV, y `tb_opl3_storm` bombardea el interfaz de host. `opl4wave_sim` guarda los volcados con que se depuró el motor PCM y su caché. `run_slotrd.sh` (`tb_slotrd.v`) comprueba que los registros de slot del wavetable se releen bien **a la primera** por 7Fh, a través de `opl4_pcm.v` y con un Z80 que respeta /WAIT: los diez grupos (08h-F7h) por 24 slots con la fase del acceso barrida por semilla, en reposo y con seis slots sonando; lleva sondas dentro del motor y mide cuánto dura /WAIT en cada IN 7Fh. `run_timer_stop.sh` (`tb_timer_stop.cpp`, traído de MoonTANG) para un timer del OPL3 en el ciclo exacto en que su preescalador da la vuelta (con 00h, 78h, 40h con el timer en FF y con /RESET) y comprueba que no se queda contando, que el ack y el /RESET lo dejan limpio y que los periodos no cambian; con `negativo` usa el `timer.sv` de antes del arreglo y tiene que fallar 5 de 9.
 
 ### El USB: `tools/usb_sim/`
 
