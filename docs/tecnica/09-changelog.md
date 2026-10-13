@@ -134,6 +134,17 @@ Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de 
 
 Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h, cuatro dados: 3613 y 3607 fuera de gate (-0,05 y -1,87 ns en el motor del OPL4), 3617 con una red sin rutar. Sin respaldo. En la semana, once dados para tres útiles: al 98 % de CLS la campaña de tres ya no basta, y la de cuatro tampoco sobra.
 
+## v3.8.2 (13 de octubre, en preparación): el OPL4 en canon
+
+Los dos cambios del OPL4 que la Zynq estrenó el 13 de octubre en su Z1.2.5 (commits `6bce008` y `6795e16` de su rama `zynq`), traídos a la rama `opl4-canon` desde la V3.8. **Falta la campaña de dados y la prueba en placa**: de momento solo hay simulación y síntesis sola.
+
+- **F8 = 1Bh tras el reset** (`fpga/opl4wave/YMF278B.sv`; `ymf278b_gowin.v` regenerado con `convert.sh`, una línea; `fpga/src/opl4_pcm.v`). El YMF278B real y openMSX arrancan con el FM a -9 dB por lado (F8 = 1Bh) y aquí arrancaba en 00h: en el motor RST_N e IC_N van a la misma señal y la rama asíncrona ponía `MIXFM` a 0, así que el FM del software que nunca escribe F8 sonaba 8,5 dB más alto que en el chip. `opl4_pcm.v` arranca `mix_fm` en 1Bh con un `initial` (aquí no tenía ninguno).
+- **Vibrato y trémolo del FM en canon** (`fpga/opl3/vibrato.sv`, `calc_phase_inc.sv`, `envelope_generator.sv`; canon Nuked-OPL3 / YMF262). Arregla los tres fallos que la entrada de MoonTANG de más abajo dejaba «pendiente de decisión»: el LFO avanza una vez por muestra (6,05 Hz y no 217,7), el desplazamiento lleva signo y se suma al fnum antes del bloque y del multiplicador, y el bit AM viaja por el pipeline con el resto de campos del operador. Misma latencia; `pre_mult` gana un bit.
+- **Prueba 4 de `build_timer.sh`**, antes → después: vibrato ±0,63 c a 217,7 Hz con el tono medio en +1,31 c → ±12,22 c a 6,046 Hz y +0,15 c (canon ±12 c a 6,05 Hz); con DVB = 0, ±6,34 c (canon ±6); trémolo 0,02 dB → 4,91 dB a 3,73 Hz (canon 4,9 dB), y 1,14 dB con DAM = 0 (canon 1,1). Los 8,4 millones de comprobaciones contra el modelo de Nuked se hicieron en la Zynq.
+- **Regresión** en este árbol: `build_timer.sh` entero, `run_timer_stop.sh` (9 de 9), `run_sim.sh`, `run_slotrd.sh` (tres semillas) y `tb_regrd.sv` en verde; con un banco de usar y tirar, F8 lee 00h antes y 1Bh después con RST_N e IC_N juntos. Los ficheros son los de la Zynq (`ymf278b_gowin.v` sin su cabecera BSD-3, que el `postproc.py` de aquí no añade).
+- **Área** (`medir_area.ps1`, síntesis sola): LUT 38.934 → 38.943, FF 35.556 → 35.551, BSRAM 105 sin cambio; `uopl4fm` 4.394 → 4.378 LUT. El sumador nuevo de la etapa p0 de `calc_phase_inc.sv` no se ve en área; su timing solo lo dirá una campaña.
+- **Core v3.8.2** (`FPGA_PATCH = 2`: Ajustes y MXUPDATE dirán 3.8.2). Sin dado, sin `.fs` y sin publicar.
+
 ## OPL3 y OPL4: dos arreglos de MoonTANG (5 de octubre; en la rama `V3.8`, sin core nuevo)
 
 Dos defectos del bloque OPL4 que MoonTANG comparte con el MSXimus, encontrados allí en simulación al revisar mangOPL4 (ninguno visto en placa) y traídos el mismo día a la Zynq, al 60K y al 138K. Los ficheros quedan iguales que en MoonTANG salvo las diferencias de siempre (en `opl4_pcm.v`, la fracción del CE, el divisor de la telemetría y el `RD_MIRROR` de MoonTANG).
