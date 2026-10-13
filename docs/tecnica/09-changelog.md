@@ -134,7 +134,9 @@ Del firmware del BL616, ya que se tocó: el `bl616_v3.1.bin` publicado el 26 de 
 
 Core: dado 3623, 2667d28b, margen 0,756 ns (clk_86, dentro del shim del V9968); holds solo la DDR3. Campaña v36h, cuatro dados: 3613 y 3607 fuera de gate (-0,05 y -1,87 ns en el motor del OPL4), 3617 con una red sin rutar. Sin respaldo. En la semana, once dados para tres útiles: al 98 % de CLS la campaña de tres ya no basta, y la de cuatro tampoco sobra.
 
-## v3.8.2 (13 de octubre, en preparación): el OPL4 en canon
+## v3.8.2 (13 de octubre, publicada en msx.barcelona): el OPL4 en canon
+
+Core: **dado 5393** (campaña `v382`: 5351 y 5387 fuera por setup, −2,2 y −0,12 ns; 5381 y 5399 sin rutar, 519 y 121 redes), peor setup +0,965 ns (`clk_86`, en el motor de comandos del V9968), CLS 98 %, holds solo en la DDR3. `files/20261013/MSXimus_v3.8.2.fs` (0da50d27957f) y `_jtag.bin` (32db162c8c9a); packs y ondas, los de la 3.8.0b4. Publicada el mismo día en msx.barcelona (`MXUPDATE /N`), sin release en GitHub; en la web quedan la 3.8.2 y la 3.8.1. Sin probar en placa. Los arreglos de nivel del motor wave que se están midiendo en la Zynq (margen de 24 canales, TL con LD=0, envolvente, pan) **no** van en esta: serán la 3.8.3.
 
 Los cambios del OPL4 que la Zynq estrenó el 13 de octubre en su Z1.2.5 (commits `6bce008` y `6795e16` de su rama `zynq`) y en su Z1.2.6 (`0b35da6`), traídos a la V3.8 (primero por la rama `opl4-canon`, fusionada por fast-forward y borrada). **Falta la campaña de dados y la prueba en placa**: de momento solo hay simulación y síntesis sola.
 

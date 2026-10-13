@@ -272,6 +272,10 @@ tools/           Testbenches y utilidades de validación
   mxupd.py       Hace los .UPD y el manifiesto de la actualización
 ```
 
+## Lo nuevo de la v3.8.2 (solo por la actualización)
+
+- El OPL4 como el chip real: `F8h` arranca en 1Bh (FM a −9 dB), el vibrato y el trémolo del FM como el YMF262, la activación NEW2 también por el puerto `C5h` (los discos de música holandeses del MoonBlaster Wave BASIC driver callaban) y el arreglo del timer parado. Se instala con `MXUPDATE /N`.
+
 ## Lo nuevo de la v3.8.1 (solo por la actualización)
 
 - Los registros de slot del wavetable del OPL4 se releen bien a la primera por el puerto 7Fh (antes, la primera lectura devolvía a menudo el registro leído justo antes). La música no cambia. Se instala con `MXUPDATE /N`.

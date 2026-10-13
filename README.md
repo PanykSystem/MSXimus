@@ -272,6 +272,10 @@ tools/           Testbenches and validation utilities
   mxupd.py       Builds the .UPD files and the update manifest
 ```
 
+## What's new in v3.8.2 (network update only)
+
+- The OPL4 as the real chip: `F8h` starts at 1Bh (FM at −9 dB), the FM vibrato and tremolo follow the YMF262, the NEW2 enable is also accepted through port `C5h` (the Dutch MoonBlaster Wave BASIC-driver music disks were silent), the stopped-timer fix. Install it with `MXUPDATE /N`.
+
 ## What's new in v3.8.1 (network update only)
 
 - The OPL4 wavetable slot registers read back right the first time through port 7Fh (before, the first read often returned the register read just before it). Music does not change. Install it with `MXUPDATE /N`.
