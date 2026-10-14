@@ -272,6 +272,10 @@ tools/           Testbenches and validation utilities
   mxupd.py       Builds the .UPD files and the update manifest
 ```
 
+## What's new in v3.8.3 (network update only)
+
+- The OPL4 wave engine behaves like the chip: headroom for the 24 voices (dense music used to clip), volume fades reach their target without buzzing, envelope rates and attack as on the YMF278B (a low note at a slow rate no longer dies within milliseconds), panning in −3 dB steps and silence below −60 dB. Wave sits 3 dB per channel lower than in 3.8.2 (openMSX's level); channel 6 of the Settings mixer raises it if you prefer. Installed with `MXUPDATE /N`.
+
 ## What's new in v3.8.2 (network update only)
 
 - The OPL4 as the real chip: `F8h` starts at 1Bh (FM at −9 dB), the FM vibrato and tremolo follow the YMF262, the NEW2 enable is also accepted through port `C5h` (the Dutch MoonBlaster Wave BASIC-driver music disks were silent), the stopped-timer fix. Install it with `MXUPDATE /N`.
