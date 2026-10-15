@@ -272,6 +272,10 @@ tools/           Testbenches y utilidades de validación
   mxupd.py       Hace los .UPD y el manifiesto de la actualización
 ```
 
+## Lo nuevo de la v3.8.4 (solo por la actualización)
+
+- El motor wave del OPL4 implementa DAMP y la pseudo-reverb como el chip (los cortes de nota de MoonBlaster Wave callan en 11 ms y las colas de reverb caen a la tasa correcta), desaparece el ruido de 2,7 s al cargar canciones en la demo *Dutch Moonsound Veterans HDD* (una voz ociosa con TL=7Fh y trémolo envolvía a plena escala; afectaba a la 3.8.2 y la 3.8.3), las relecturas por `7Fh` ya no perturban a las otras voces, el reset del LFO actúa sobre su voz, DL va a 3 dB por paso, NEW2 se puede apagar, el modo de acceso a memoria calla como en el chip y la relectura del FM sigue al latch de dirección único. Se instala con `MXUPDATE /N`.
+
 ## Lo nuevo de la v3.8.3 (solo por la actualización)
 
 - El motor wave del OPL4 como el chip: margen para las 24 voces (la música densa recortaba), los fundidos de volumen llegan a su destino sin zumbido, la envolvente y el ataque como el YMF278B (una nota grave a tasa baja ya no muere en milisegundos), pan en pasos de −3 dB y silencio por debajo de −60 dB. El wave queda 3 dB por canal más bajo que en la 3.8.2 (el nivel de openMSX); el canal 6 del mezclador de Ajustes lo sube si se prefiere. Se instala con `MXUPDATE /N`.
