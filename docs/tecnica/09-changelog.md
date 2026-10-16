@@ -4,6 +4,8 @@ Versión a versión, qué cambió, qué dado se entregó y con qué hashes. Sale
 
 Los hashes son md5, los ocho primeros dígitos salvo donde se indica. El "dado" es el número primo con que se sembró el place and route ([capítulo 07](07-sintesis-campanas.md)); el margen es el peor setup del informe de temporización.
 
+**Estado de la línea (16/10/2026): cerrada en la v3.8.4.** La v3.8.4 está validada en placa (MoonBlaster Wave, MiG, Surrec y la parte 2 de «Dutch Moonsound Veterans HDD», los casos que habían enseñado los defectos de las 3.8.x) y es la última versión prevista del Console 60K; las 3.8.1 a 3.8.4 solo existen como actualización por red (`MXUPDATE /N`) y la release de GitHub se queda en la v3.8.0b4. Los motores (OPL4, OPLL, T80, V9968) siguen evolucionando en la línea MSXimus Z (Zynq), que es la referencia; cada arreglo que la Zynq valide se apuntará como candidato aquí, pero solo un fallo grave en placa reabriría la línea. El 138K sigue al día con el mismo código en su repositorio, sin build.
+
 ## v3.1 (26 de agosto de 2026, publicada, tag `v3.1.0`)
 
 La versión que da nombre a la era: **el core reconstruido sin el SSRAM de la GW5AT-60B**, que Gowin retiró por un problema de silicio. Todas las memorias que vivían ahí pasaron a BSRAM o a registros, lo que obligó a rehacer por dentro el motor de ondas del OPL4, los registros del OPL3 y la caché PCM.
