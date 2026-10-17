@@ -4,19 +4,33 @@ python3 -m pip install --user --break-system-packages z80) con un MSX-DOS de imi
 _READ/_WRITE/_SEEK/_CLOSE/_TERM, _GENV PROGRAM, _DELETE y _RENAME sobre ficheros en memoria) y el puente de la flash (fpga/src/flash_bridge.v) sobre
 16 MB, con la flash de un 60K, un 138K o un MSXnano. Prueba la tabla de placas: que cada .UPD solo entra en la suya,
 que el pack y el core quedan byte a byte, que /R borra los ajustes de la placa (pack + 512 KB) y nada mas.
+17/10/2026 (MXUPDATE 1.3): la 138K con su flash de verdad, una W25Q64 de 8 MB (la direccion da la vuelta: 0x800000 es
+0x000000, el bitstream) y el mapa nuevo (pack 0x500000, ajustes 0x580000, ondas 0x600000); sus .UPD los hace
+tools/mxupd.py (crear), con el bitstream de la 138K de --bs138 (.fs o .bin) o, sin el, uno de imitacion de 5,1 MB.
+Un .UPD de la 138K con el mapa viejo (pack 0x800000, ondas 0x900000) tiene que salir rechazado sin tocar la flash.
 
     python3 banco_mxu.py --com ../mxupdate.com --upd60 PACK_ES.UPD --updnano NANO.UPD --updnanopack NANOPACK.UPD
+        [--bs138 msximus138.fs]
 """
+import contextlib
+import io
+import tempfile
 import argparse
 import re
 import random
+import shutil
 import struct
 import sys
+import zlib
 
 import os
 import z80
 
 from red_mxu import Unapi, Web
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+sys.dont_write_bytecode = True                            # sin __pycache__ en tools/
+import mxupd                                             # noqa: E402  (tools/mxupd.py: los .UPD de la 138K)
 
 FRAME = 71590
 TPA = 0xD600
@@ -34,7 +48,8 @@ class Puente:
         self.errores = []
 
     def dir(self):
-        return (self.a2 << 16) | (self.a1 << 8)
+        # la flash solo mira los bits de direccion que tiene: en la W25Q64 (8 MB) 0x800000 vuelve a ser 0x000000
+        return ((self.a2 << 16) | (self.a1 << 8)) % len(self.f)
 
     def out(self, p, v):
         if p == 0x40:
@@ -68,7 +83,7 @@ class Puente:
             self.pbuf.append(v)
             if len(self.pbuf) == 256:
                 for i, b in enumerate(self.pbuf):
-                    self.f[self.pdir + i] &= b
+                    self.f[(self.pdir + i) % len(self.f)] &= b
                 self.modo, self.ocupado = 0, 2
 
     def inp(self, p):
@@ -93,7 +108,7 @@ class Puente:
             return st
         if p == 0x44 and self.modo == 3:
             v = self.f[self.ptr]
-            self.ptr += 1
+            self.ptr = (self.ptr + 1) % len(self.f)
             return v
         if p == 0x4E:
             return 0x00
@@ -233,14 +248,43 @@ def segmentos(upd):
     return [struct.unpack("<IIII", upd[64 + 16 * i:80 + 16 * i]) for i in range(upd[56])]
 
 
-def flash(bitstream4k, pack, ajustes):
+def flash(bitstream4k, pack, ajustes, tam=0x1000000, ondas=None):
     rnd = random.Random(7)
-    f = bytearray(b"\xff" * 0x1000000)
+    f = bytearray(b"\xff" * tam)
     f[0:4096] = bitstream4k
     f[4096:0x100000] = rnd.randbytes(0x100000 - 4096)
     f[pack:pack + 0x80000] = rnd.randbytes(0x80000)
     f[ajustes:ajustes + 16] = b"AB" + bytes(range(1, 15))
+    if ondas is not None:                                  # las ondas del OPL4 de antes (2 MB)
+        f[ondas:ondas + 0x200000] = rnd.randbytes(0x200000)
     return f
+
+
+def upd_crudo(placa, segs, version="3.7.0", variante="nextor214"):
+    """Un .UPD hecho a mano, con direcciones que mxupd.py ya no da (el mapa viejo de la 138K)."""
+    cab_len = 64 + 16 * len(segs) + 4
+    off = (cab_len + 255) & ~255
+    tabla, datos = b"", []
+    for direc, d in segs:
+        tabla += struct.pack("<IIII", direc, len(d), zlib.crc32(d) & 0xFFFFFFFF, off)
+        datos.append((off, d))
+        off = (off + len(d) + 255) & ~255
+    cab = (b"MXUPD1\x1a\x00" + placa.encode().ljust(16, b"\0") + version.encode().ljust(16, b"\0") +
+           variante.encode().ljust(16, b"\0") + bytes([len(segs)]) + bytes(7) + tabla)
+    cab += struct.pack("<I", zlib.crc32(cab) & 0xFFFFFFFF)
+    out = bytearray(cab)
+    for o, d in datos:
+        out += bytes(o - len(out)) + d
+    return bytes(out)
+
+
+def upd_mxupd(tmp, nombre, placa, bitstream=None, pack=None, onda=None, variante="nextor214"):
+    """Un .UPD hecho con tools/mxupd.py crear (el de verdad), sin su informe en pantalla."""
+    a = argparse.Namespace(o=os.path.join(tmp, nombre), placa=placa, version="3.8.4", variante=variante,
+                           bitstream=bitstream, pack=pack, onda=onda)
+    with contextlib.redirect_stdout(io.StringIO()):
+        mxupd.crear(a)
+    return open(a.o, "rb").read()
 
 
 def esperado(antes, upd, borrar=None):
@@ -262,6 +306,7 @@ def main():
     ap.add_argument("--updnanopack", required=True, help=".UPD del MSXnano solo con el pack")
     ap.add_argument("--web-nano", help="carpeta msxnano/ de mxupd.py publicar (manifiesto + .upd)")
     ap.add_argument("--web-60k", help="carpeta tang60k/ de mxupd.py publicar (con --onda)")
+    ap.add_argument("--bs138", help="bitstream de la 138K con el mapa de 8 MB (.fs o .bin); sin el, uno de imitacion")
     a = ap.parse_args()
     com = open(a.com, "rb").read()
     u60 = open(a.upd60, "rb").read()
@@ -278,7 +323,45 @@ def main():
     malo[s0[3] + 5000] ^= 1
     nano = lambda: flash(bs_nano, 0x200000, 0x280000)
     c60 = lambda: flash(bs_60, 0x400000, 0x480000)
-    c138 = lambda: flash(bs_138, 0x800000, 0x880000)
+    c138 = lambda: flash(bs_138, 0x500000, 0x580000, 0x800000, 0x600000)   # W25Q64 de 8 MB, el mapa nuevo
+    # ---- los .UPD de la 138K: los del mapa nuevo con tools/mxupd.py, los del viejo a mano ----
+    tmp = tempfile.mkdtemp(prefix="banco_mxu_")
+    rnd = random.Random(138)
+    ruta_bs138 = a.bs138
+    if not ruta_bs138:                                    # de imitacion, del tamano del dado 5519 (5.122.344 bytes)
+        ruta_bs138 = os.path.join(tmp, "bs138.bin")
+        open(ruta_bs138, "wb").write(bytes(bs_138) + rnd.randbytes(5122344 - len(bs_138)))
+    ruta_pack138 = os.path.join(tmp, "pack138.bin")
+    open(ruta_pack138, "wb").write(rnd.randbytes(0x80000))
+    ruta_onda138 = os.path.join(tmp, "yrw801.bin")
+    open(ruta_onda138, "wb").write(rnd.randbytes(0x200000))
+    u138 = upd_mxupd(tmp, "core.upd", "console138k", ruta_bs138, ruta_pack138)
+    u138full = upd_mxupd(tmp, "full.upd", "console138k", ruta_bs138, ruta_pack138, ruta_onda138)
+    u138pack = upd_mxupd(tmp, "pack.upd", "console138k", pack=ruta_pack138)
+    d0, t0, _, o0 = segmentos(u138)[0]
+    bs138 = u138[o0:o0 + t0]
+    pk138 = open(ruta_pack138, "rb").read()
+    on138 = open(ruta_onda138, "rb").read()
+    u138_viejo = upd_crudo("console138k", [(0x800000, pk138)])
+    u138_viejo_full = upd_crudo("console138k", [(0, bs138), (0x800000, pk138), (0x900000, on138)])
+    u138_grande = upd_crudo("console138k", [(0, bs138 + bytes(0x501000 - len(bs138)))])
+    def mxupd_rechaza(**k):
+        try:
+            upd_mxupd(tmp, "no.upd", "console138k", **k)
+        except SystemExit:
+            return True
+        return False
+    ruta_grande = os.path.join(tmp, "grande.bin")
+    open(ruta_grande, "wb").write(bs138 + bytes(0x500001 - len(bs138)))
+    tabla = [
+        ("mxupd.py: la 138K con el bitstream en 0, el pack en 0x500000 y las ondas en 0x600000",
+         [s[0] for s in segmentos(u138full)] == [0, 0x500000, 0x600000] and d0 == 0),
+        ("mxupd.py: el bitstream de la 138K (%d bytes%s) cabe antes del pack" % (
+            len(bs138), ", " + os.path.basename(a.bs138) if a.bs138 else ", de imitacion"), len(bs138) <= 0x500000),
+        ("mxupd.py: no hace un .UPD de la 138K con un bitstream de mas de 0x500000 bytes",
+         mxupd_rechaza(bitstream=ruta_grande)),
+    ]
+    shutil.rmtree(tmp, ignore_errors=True)                # todo esta ya en memoria
     casos = [
         # nombre, flash, puente, argumentos, ficheros, teclas, version del core, texto, flash esperada
         ("60K: el pack", c60, {}, "PACK.UPD", {"PACK.UPD": u60}, "S", 0x38, "Listo", lambda f: esperado(f, u60)),
@@ -312,6 +395,24 @@ def main():
         ("/? la ayuda (sin puente)", nano, {"presente": False}, "/?", {}, "", 0x21, "esta ayuda", None),
         ("/h la ayuda (con un .UPD al lado: no lo toca)", nano, {}, "/h", {"MSXNANO.UPD": unano}, "", 0x21,
          "/H /?", None),
+        # ---- la 138K con el mapa de 8 MB (MXUPDATE 1.3) ----
+        ("138K: core + pack, nombre por defecto (MSX138K.UPD: 0 y 0x500000)", c138, {}, "",
+         {"MSX138K.UPD": u138}, "S", 0x38, "Listo", lambda f: esperado(f, u138)),
+        ("138K: solo el pack (0x500000)", c138, {}, "PACK.UPD", {"PACK.UPD": u138pack}, "S", 0x38, "Listo",
+         lambda f: esperado(f, u138pack)),
+        ("138K sin nombre: el MSXIMUS.UPD del menu si es de la 138K", c138, {}, "", {"MSXIMUS.UPD": u138pack}, "S",
+         0x38, "Listo", lambda f: esperado(f, u138pack)),
+        ("138K: /R completa (ondas en 0x600000, borra los ajustes de 0x580000)", c138, {}, "FULL.UPD /R",
+         {"FULL.UPD": u138full}, "S", 0x38, "Ajustes borrados", lambda f: esperado(f, u138full, 0x580000)),
+        ("138K: .UPD con el pack en 0x800000 (mapa viejo): rechazado", c138, {}, "VIEJO.UPD",
+         {"VIEJO.UPD": u138_viejo}, "S", 0x38, "no es valido", None),
+        ("138K: /R con un completo del mapa viejo (0x800000, ondas 0x900000): rechazado", c138, {}, "VIEJO.UPD /R",
+         {"VIEJO.UPD": u138_viejo_full}, "S", 0x38, "no es valido", None),
+        ("138K: bitstream de 0x501000 bytes (pisaria el pack): rechazado", c138, {}, "GRANDE.UPD",
+         {"GRANDE.UPD": u138_grande}, "S", 0x38, "no es valido", None),
+        ("/C de un .UPD de la 138K del mapa viejo (sin puente): no valido", nano, {"presente": False}, "VIEJO.UPD /C",
+         {"VIEJO.UPD": u138_viejo}, "", 0x21, "no es valido", None),
+        ("60K con un .UPD de la 138K", c60, {}, "CORE.UPD", {"CORE.UPD": u138}, "S", 0x38, "para otra placa", None),
     ]
     # ---- la red: /N contra msx.barcelona (TLS) y /S contra el PC ----
     red = []
@@ -374,9 +475,21 @@ def main():
             ("red 60K: /N /R (completa: core + pack + ondas, borra 0x480000)", c60, {}, "/N /R", {}, "\rSS", 0x38,
              "Ajustes borrados", lambda f: esperado(f, full, 0x480000), w6(), "valida"),
         ]
+    # la 138K en la web (tang138k/), con los .UPD de mxupd.py: /N /R baja el completo y lo graba en 0, 0x500000 y 0x600000
+    man138 = ("MSXIMUS-UPD 1\nplaca=console138k\nversion=3.8.4\nimagen=nextor214 384_n214_es.upd %d\n"
+              "completa=nextor214 384_n214_es_full.upd %d\n" % (len(u138), len(u138full))).encode()
+    w138 = {"/wp-content/ota/tang138k/manifiesto.txt": man138, "/wp-content/ota/tang138k/384_n214_es.upd": u138,
+            "/wp-content/ota/tang138k/384_n214_es_full.upd": u138full}
+    red += [
+        ("red 138K: /N /R (completa de tang138k/: ondas en 0x600000, borra 0x580000)", c138, {}, "/N /R", {},
+         "\rSS", 0x38, "Ajustes borrados", lambda f: esperado(f, u138full, 0x580000), Web(dict(w138)), "valida"),
+    ]
     for x in red:
         casos.append(x)
     bien = 0
+    for nombre, ok in tabla:                              # sin Z80: lo que da tools/mxupd.py para la 138K
+        print("%s %s" % ("OK  " if ok else "MAL ", nombre))
+        bien += bool(ok)
     for caso_ in casos:
         nombre, fl, pkw, args, fich, teclas, ver, espera, ok = caso_[:9]
         web, regla = (caso_[9], caso_[10]) if len(caso_) > 9 else (None, None)
@@ -419,10 +532,11 @@ def main():
                 print("      " + x)
             print("\n".join("      | " + l for l in txt.split("\n")))
         bien += not fallos
-    print("%d de %d bien" % (bien, len(casos)))
+    total = len(tabla) + len(casos)
+    print("%d de %d bien" % (bien, total))
     if os.environ.get("VER"):
         print(txt)
-    sys.exit(0 if bien == len(casos) else 1)
+    sys.exit(0 if bien == total else 1)
 
 
 if __name__ == "__main__":

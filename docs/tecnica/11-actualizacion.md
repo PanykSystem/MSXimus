@@ -53,8 +53,10 @@ Direcciones por placa:
 | Placa | IDCODE | Core | Pack | Ajustes | Ondas del OPL4 |
 |---|---|---|---|---|---|
 | 60K | 0001481Bh | 0x000000 | 0x400000 | 0x480000 | 0x500000 |
-| 138K | 0001081Bh | 0x000000 | 0x800000 | 0x880000 | 0x900000 |
+| 138K | 0001081Bh | 0x000000 | 0x500000 | 0x580000 | 0x600000 |
 | MSXnano 2.1.1 | 0000081Bh | 0x000000 | 0x200000 | 0x280000 | — |
+
+La 138K lleva la misma flash que el 60K, una W25Q64 de 8 MB; sus `.UPD` necesitan MXUPDATE 1.3 o posterior (las anteriores esperaban el pack en 0x800000 y los rechazan).
 
 El bloque de ajustes **nunca** va en un `.UPD`. De los packs del MSXnano se quita la cola de 6 bytes de configuración. `MXUPDATE /R` borra el sector de los ajustes a propósito: sin la firma «AB» el core arranca con los de fábrica, los mismos que el rescate con S2.
 
